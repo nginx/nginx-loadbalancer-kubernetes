@@ -21,9 +21,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// Watcher is responsible for watching for changes to Kubernetes resources.
-// Particularly, Services in the namespace defined in the WatcherSettings::NginxIngressNamespace setting.
-// When a change is detected, an Event is generated and added to the Handler's queue.
+// Watcher is responsible for watching for changes to kubernetes services marked
+// with the correct annotation. NLK watches for changes to the services
+// themselves, but also changes to the nodes, endpoint slices and load balancers
+// associated with those services. When a change is detected, an Event is
+// generated and added to the synchronizer's queue.
 type Watcher struct {
 	synchronizer synchronization.Interface
 

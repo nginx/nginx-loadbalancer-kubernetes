@@ -33,7 +33,7 @@ nlk:
     ## trace,debug,info,warn,error,fatal,panic
     logLevel: "info"
 
-    ## the nginx hosts (comma-separated) to send upstream updates to
+    ## the nginx hosts to send upstream updates to. For multiple hosts, use a sequence
     nginxHosts: ""
     ## Sets the annotation value that NLK is looking for to watch a Service
     # serviceAnnotationMatch: nginxaas

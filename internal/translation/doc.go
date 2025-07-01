@@ -4,7 +4,7 @@
  */
 
 /*
-Package translation includes functionality to translate Ingress events to target system definitions.
+Package translation includes functionality to translate service events into NGINX upstream server updates.
 */
 
 package translation

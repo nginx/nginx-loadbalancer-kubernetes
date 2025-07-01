@@ -4,7 +4,7 @@
  */
 
 /*
-Package synchronization includes functionality to synchronize Ingress events to NGINX+ Configuration API commands.
+Package synchronization includes functionality to synchronize kubernetes service events to NGINX upstream updates.
 */
 
 package synchronization
