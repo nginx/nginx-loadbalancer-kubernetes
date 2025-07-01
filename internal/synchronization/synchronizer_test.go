@@ -257,10 +257,7 @@ func defaultSettings(nginxHosts ...string) configuration.Settings {
 	return configuration.Settings{
 		NginxPlusHosts: nginxHosts,
 		Synchronizer: configuration.SynchronizerSettings{
-			MaxMillisecondsJitter: 750,
-			MinMillisecondsJitter: 250,
-			RetryCount:            5,
-			Threads:               1,
+			Threads: 1,
 			WorkQueueSettings: configuration.WorkQueueSettings{
 				RateLimiterBase: time.Second * 2,
 				RateLimiterMax:  time.Second * 60,
