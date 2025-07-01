@@ -33,20 +33,19 @@ func NewTranslator(
 	}
 }
 
-// Translate transforms event data into an intermediate format that can be consumed by the BorderClient implementations
-// and used to update the Border Servers.
+// Translate transforms service events into upstream server updates that can be implemented by the border client.
 func (t *Translator) Translate(event *core.Event) (core.ServerUpdateEvents, error) {
 	slog.Debug("Translate::Translate")
 
 	return t.buildServerUpdateEvents(event.Service.Spec.Ports, event)
 }
 
-// buildServerUpdateEvents builds a list of ServerUpdateEvents based on the event type
-// The NGINX+ Client uses a list of servers for Created and Updated events.
-// The client performs reconciliation between the list of servers in the NGINX+ Client call
-// and the list of servers in NGINX+.
-// The NGINX+ Client uses a single server for Deleted events;
-// so the list of servers is broken up into individual events.
+// buildServerUpdateEvents builds a list of ServerUpdateEvents based on the
+// event type. The NGINX+ Client uses a list of servers for Created and Updated
+// events. The client performs reconciliation between the list of servers in the
+// NGINX+ Client call and the list of servers in NGINX+. If a delete event is
+// received, the translator generates an empty list of servers: the client
+// reconciliation will then cause all servers to be deleted.
 func (t *Translator) buildServerUpdateEvents(ports []v1.ServicePort, event *core.Event,
 ) (events core.ServerUpdateEvents, err error) {
 	slog.Debug("Translate::buildServerUpdateEvents", "ports", ports)
