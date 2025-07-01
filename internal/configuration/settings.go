@@ -15,38 +15,16 @@ import (
 )
 
 const (
-	// ConfigMapsNamespace is the value used to filter the ConfigMaps Resource in the Informer.
-	ConfigMapsNamespace = "nlk"
-
-	// ConfigMapName is the name of the ConfigMap that contains the configuration for the application.
-	ConfigMapName = "nlk-config"
-
-	// ResyncPeriod is the value used to set the resync period for the Informer.
-	ResyncPeriod = 0
-
-	// NlkPrefix is used to determine if a Port definition should be handled and used to update a Border Server.
-	// The Port name () must start with this prefix, e.g.:
-	//   nlk-<my-upstream-name>
-	NlkPrefix = ConfigMapsNamespace + "-"
-
-	// PortAnnotationPrefix defines the prefix used when looking up a Port in the Service Annotations.
-	// The value of the annotation determines which BorderServer implementation will be used.
-	// See the documentation in the `application/application_constants.go` file for details.
-	PortAnnotationPrefix = "nginxinc.io"
-
-	// ServiceAnnotationMatchKey is the key name of the annotation in the application's config map
-	// that identifies the ingress service whose events will be monitored.
+	// ServiceAnnotationMatchKey is the key name of the annotation that
+	// identifies the services whose events will be monitored.
 	ServiceAnnotationMatchKey = "service-annotation-match"
 
-	// DefaultServiceAnnotation is the default name of the ingress service whose events will be
+	// DefaultServiceAnnotation is the default name of the services whose events will be
 	// monitored.
 	DefaultServiceAnnotation = "nginxaas"
 )
 
-// WorkQueueSettings contains the configuration values needed by the Work Queues.
-// There are two work queues in the application:
-// 1. nlk-handler queue, used to move messages between the Watcher and the Handler.
-// 2. nlk-synchronizer queue, used to move message between the Handler and the Synchronizer.
+// WorkQueueSettings contains the configuration for the nlk-synchronizer queue.
 // The queues are NamedDelayingQueue objects that use an ItemExponentialFailureRateLimiter
 // as the underlying rate limiter.
 type WorkQueueSettings struct {
@@ -61,18 +39,6 @@ type WorkQueueSettings struct {
 	RateLimiterMax time.Duration
 }
 
-// HandlerSettings contains the configuration values needed by the Handler.
-type HandlerSettings struct {
-	// RetryCount is the number of times the Handler will attempt to process a message before giving up.
-	RetryCount int
-
-	// Threads is the number of threads that will be used to process messages.
-	Threads int
-
-	// WorkQueueSettings is the configuration for the Handler's queue.
-	WorkQueueSettings WorkQueueSettings
-}
-
 // WatcherSettings contains the configuration values needed by the Watcher.
 type WatcherSettings struct {
 	// ServiceAnnotation is the annotation of the ingress service whose events the watcher should monitor.
@@ -84,15 +50,6 @@ type WatcherSettings struct {
 
 // SynchronizerSettings contains the configuration values needed by the Synchronizer.
 type SynchronizerSettings struct {
-	// MaxMillisecondsJitter is the maximum number of milliseconds that will be applied when adding an event to the queue.
-	MaxMillisecondsJitter int
-
-	// MinMillisecondsJitter is the minimum number of milliseconds that will be applied when adding an event to the queue.
-	MinMillisecondsJitter int
-
-	// RetryCount is the number of times the Synchronizer will attempt to process a message before giving up.
-	RetryCount int
-
 	// Threads is the number of threads that will be used to process messages.
 	Threads int
 
@@ -113,9 +70,6 @@ type Settings struct {
 
 	// APIKey is the api key used to authenticate with the dataplane API.
 	APIKey string
-
-	// Handler contains the configuration values needed by the Handler.
-	Handler HandlerSettings
 
 	// Synchronizer contains the configuration values needed by the Synchronizer.
 	Synchronizer SynchronizerSettings
@@ -157,20 +111,8 @@ func Read(configName, configPath string) (s Settings, err error) {
 		NginxPlusHosts: v.GetStringSlice("nginx-hosts"),
 		SkipVerifyTLS:  skipVerifyTLS,
 		APIKey:         base64.StdEncoding.EncodeToString([]byte(v.GetString("NGINXAAS_DATAPLANE_API_KEY"))),
-		Handler: HandlerSettings{
-			RetryCount: 5,
-			Threads:    1,
-			WorkQueueSettings: WorkQueueSettings{
-				RateLimiterBase: time.Second * 2,
-				RateLimiterMax:  time.Second * 60,
-				Name:            "nlk-handler",
-			},
-		},
 		Synchronizer: SynchronizerSettings{
-			MaxMillisecondsJitter: 750,
-			MinMillisecondsJitter: 250,
-			RetryCount:            5,
-			Threads:               1,
+			Threads: 1,
 			WorkQueueSettings: WorkQueueSettings{
 				RateLimiterBase: time.Second * 2,
 				RateLimiterMax:  time.Second * 60,

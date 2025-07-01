@@ -22,20 +22,8 @@ func TestConfiguration_Read(t *testing.T) {
 				LogLevel:       "warn",
 				NginxPlusHosts: []string{"https://10.0.0.1:9000/api"},
 				SkipVerifyTLS:  false,
-				Handler: configuration.HandlerSettings{
-					RetryCount: 5,
-					Threads:    1,
-					WorkQueueSettings: configuration.WorkQueueSettings{
-						RateLimiterBase: time.Second * 2,
-						RateLimiterMax:  time.Second * 60,
-						Name:            "nlk-handler",
-					},
-				},
 				Synchronizer: configuration.SynchronizerSettings{
-					MaxMillisecondsJitter: 750,
-					MinMillisecondsJitter: 250,
-					RetryCount:            5,
-					Threads:               1,
+					Threads: 1,
 					WorkQueueSettings: configuration.WorkQueueSettings{
 						RateLimiterBase: time.Second * 2,
 						RateLimiterMax:  time.Second * 60,
@@ -54,20 +42,8 @@ func TestConfiguration_Read(t *testing.T) {
 				LogLevel:       "warn",
 				NginxPlusHosts: []string{"https://10.0.0.1:9000/api", "https://10.0.0.2:9000/api"},
 				SkipVerifyTLS:  true,
-				Handler: configuration.HandlerSettings{
-					RetryCount: 5,
-					Threads:    1,
-					WorkQueueSettings: configuration.WorkQueueSettings{
-						RateLimiterBase: time.Second * 2,
-						RateLimiterMax:  time.Second * 60,
-						Name:            "nlk-handler",
-					},
-				},
 				Synchronizer: configuration.SynchronizerSettings{
-					MaxMillisecondsJitter: 750,
-					MinMillisecondsJitter: 250,
-					RetryCount:            5,
-					Threads:               1,
+					Threads: 1,
 					WorkQueueSettings: configuration.WorkQueueSettings{
 						RateLimiterBase: time.Second * 2,
 						RateLimiterMax:  time.Second * 60,

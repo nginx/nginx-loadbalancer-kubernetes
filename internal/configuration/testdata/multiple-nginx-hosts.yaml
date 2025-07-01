@@ -1,5 +1,3 @@
-ca-certificate: "fakeCAKey"
-client-certificate: "fakeCertKey"
 log-level: "warn"
 nginx-hosts: ["https://10.0.0.1:9000/api", "https://10.0.0.2:9000/api"]
 tls-mode: "no-tls"
