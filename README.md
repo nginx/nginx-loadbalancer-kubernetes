@@ -1,3 +1,4 @@
+<!-- markdownlint-disable-next-line first-line-h1 -->
 [![CI](https://github.com/nginxinc/nginx-loadbalancer-kubernetes/actions/workflows/build-test.yml/badge.svg)](https://github.com/nginxinc/nginx-loadbalancer-kubernetess/actions/workflows/build-test.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nginxinc/nginx-loadbalancer-kubernetes)](https://goreportcard.com/report/github.com/nginxinc/nginx-loadbalancer-kubernetes)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
@@ -8,15 +9,12 @@
 [![Community Support](https://badgen.net/badge/support/community/cyan?icon=awesome)](https://github.com/nginxinc/nginx-loadbalancer-kubernetes/discussions)
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 
-
-
 <div style="margin-bottom: 5em;">
     <span>
         <img style="float: left;" src="nlk-logo.svg" width="124" />
         <h2 style="padding: 1.5em">nginx-loadbalancer-kubernetes</h2>
     </span>
 </div>
-
 
 The NGINX Loadbalancer for Kubernetes, or _NLK_, is a Kubernetes controller that provides TCP load balancing external to a Kubernetes cluster running on-premise.
 
@@ -70,7 +68,7 @@ NLK itself does not perform load balancing. Rather, NLK allows you to manage Ser
 There are few bits of administrivia to get out of the way before you can start leveraging NLK for your load balancing needs.
 
 As noted above, NLK is intended for when you have one or more Kubernetes clusters running on-premise. In addition to this,
-you need to have at least one NGINX Plus host running outside your cluster (Please refer to the [Roadmap](#Roadmap) for information about other load balancer servers).
+you need to have at least one NGINX Plus host running outside your cluster (Please refer to the [Roadmap](#roadmap) for information about other load balancer servers).
 
 ### Deployment
 
@@ -107,27 +105,27 @@ There is a much more detailed [Installation Reference](docs/README.md) available
 
 1. Clone this repo (optional, you can simply copy the `deployments/` directory)
 
-```git clone git@github.com:nginxinc/nginx-loadbalancer-kubernetes.git```
+    ```git clone git@github.com:nginxinc/nginx-loadbalancer-kubernetes.git```
 
-2. Apply the Namespace
+1. Apply the Namespace
 
-```kubectl apply -f deployments/deployment/namespace.yaml```
+    ```kubectl apply -f deployments/deployment/namespace.yaml```
 
-3. Apply the RBAC resources
+1. Apply the RBAC resources
 
-```./deployments/rbac/apply.sh```
+    ```./deployments/rbac/apply.sh```
 
-4. Update / Apply the ConfigMap (For best results update the `nginx-hosts` values first)
+1. Update / Apply the ConfigMap (For best results update the `nginx-hosts` values first)
 
-```kubectl apply -f deployments/deployment/configmap.yaml```
+    ```kubectl apply -f deployments/deployment/configmap.yaml```
 
-5. Apply the Deployment
+1. Apply the Deployment
 
-```kubectl apply -f deployments/deployment/deployment.yaml```
+    ```kubectl apply -f deployments/deployment/deployment.yaml```
 
-6. Check the logs
+1. Check the logs
 
-```kubectl -n nlk logs -f $(kubectl -n nlk get po -l "app=nlk" --no-headers -o custom-columns=":metadata.name")```
+    ```kubectl -n nlk logs -f $(kubectl -n nlk get po -l "app=nlk" --no-headers -o custom-columns=":metadata.name")```
 
 At this point NLK should be up and running. Now would be a great time to go over to the [Installation Reference](docs/README.md)
 and follow the instructions to deploy a demo application.
@@ -164,10 +162,9 @@ diverse ideas will be key to NLK becoming a solution that is useful to the commu
 when we are able to accept pull requests from the community.
 
 ## Authors
+
 - Chris Akker - Solutions Architect - Community and Alliances @ F5, Inc.
 - Steve Wagner - Solutions Architect - Community and Alliances @ F5, Inc.
-
-<br/>
 
 ## License
 
