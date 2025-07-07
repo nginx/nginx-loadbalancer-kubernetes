@@ -10,13 +10,9 @@ Don't know how something in the nginx_loadbalancer_kubernetes works? Curious if 
 
 This isn't the right place to get support for NGINX specific questions, but the following resources are available below. Thanks for your understanding!
 
-### Community Slack
+### Community Forum
 
-We have a community [Slack](https://nginxcommunity.slack.com/)!
-
-If you are not a member click [here](https://join.slack.com/t/nginxcommunity/shared_invite/zt-1aaa22w80-~_~wSMNyPxLPLp5xunOC7w) to sign up (and let us know if the link does not seem to be working!)
-
-Once you join, check out the `#beginner-questions` and `nginx-users` channels :)
+We have a community [forum](https://community.nginx.org/)! If you have any questions and/or issues, try checking out the [`Troubleshooting`](https://community.nginx.org/c/troubleshooting/8) and [`How do I...?`](https://community.nginx.org/c/how-do-i/9) categories. Both fellow community members and NGINXers might be able to help you! :)
 
 ### Documentation
 
@@ -24,6 +20,10 @@ For a comprehensive list of all NGINX directives, check out <https://nginx.org>.
 
 For a comprehensive list of admin and deployment guides for all NGINX products, check out <https://docs.nginx.com>.
 
-### Mailing List
+## Contributing
 
-Want to get in touch with the NGINX dev team directly? Try using the relevant mailing list found at <https://mailman.nginx.org/mailman3/lists/>!
+Please see the [contributing guide](/CONTRIBUTING.md) for guidelines on how to best contribute to this project.
+
+## Community Support
+
+This project does **not** offer commercial support. Community support is offered on a best effort basis through either GitHub issues/PRs/discussions or through any of our active communities.
