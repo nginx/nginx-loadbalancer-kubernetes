@@ -6,24 +6,18 @@
 package observation
 
 import (
-	"context"
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/configuration"
-	"github.com/nginxinc/kubernetes-nginx-ingress/test/mocks"
-	"k8s.io/client-go/kubernetes"
 	"testing"
+
+	"github.com/nginxinc/kubernetes-nginx-ingress/internal/configuration"
+	"github.com/stretchr/testify/require"
 )
 
-func TestWatcher_MustInitialize(t *testing.T) {
-	watcher, _ := buildWatcher()
-	if err := watcher.Watch(); err == nil {
-		t.Errorf("Expected error, got %s", err)
-	}
+func TestWatcher_ErrWithNilInformers(t *testing.T) {
+	t.Parallel()
+	_, err := buildWatcherWithNilInformer()
+	require.Error(t, err, "expected construction of watcher with nil informer to fail")
 }
 
-func buildWatcher() (*Watcher, error) {
-	k8sClient := &kubernetes.Clientset{}
-	settings, _ := configuration.NewSettings(context.Background(), k8sClient)
-	handler := &mocks.MockHandler{}
-
-	return NewWatcher(settings, handler)
+func buildWatcherWithNilInformer() (*Watcher, error) {
+	return NewWatcher(configuration.Settings{}, nil, nil, nil, nil)
 }

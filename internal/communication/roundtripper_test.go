@@ -7,21 +7,15 @@ package communication
 
 import (
 	"bytes"
-	"context"
-	"fmt"
 	netHttp "net/http"
-	"net/http/httptest"
 	"testing"
-
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/configuration"
-	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestNewRoundTripper(t *testing.T) {
-	k8sClient := fake.NewSimpleClientset()
-	settings, _ := configuration.NewSettings(context.Background(), k8sClient)
-	headers := NewHeaders()
-	transport := NewTransport(NewTlsConfig(settings))
+	t.Parallel()
+
+	headers := NewHeaders("fakeKey")
+	transport := NewTransport(true)
 	roundTripper := NewRoundTripper(headers, transport)
 
 	if roundTripper == nil {
@@ -32,8 +26,8 @@ func TestNewRoundTripper(t *testing.T) {
 		t.Fatalf(`roundTripper.Headers should not be nil`)
 	}
 
-	if len(roundTripper.Headers) != 2 {
-		t.Fatalf(`roundTripper.Headers should have 2 elements`)
+	if len(roundTripper.Headers) != 4 {
+		t.Fatalf(`roundTripper.Headers should have 3 elements`)
 	}
 
 	if roundTripper.Headers[0] != "Content-Type: application/json" {
@@ -44,55 +38,47 @@ func TestNewRoundTripper(t *testing.T) {
 		t.Fatalf(`roundTripper.Headers[1] should be "Accept: application/json"`)
 	}
 
+	if roundTripper.Headers[2] != "X-NLK-Version: " {
+		t.Fatalf(`roundTripper.Headers[2] should be "X-NLK-Version: "`)
+	}
+
+	if roundTripper.Headers[3] != "Authorization: ApiKey fakeKey" {
+		t.Fatalf(`roundTripper.Headers[3] should be "Accept: Authorization: ApiKey fakeKey"`)
+	}
+
 	if roundTripper.RoundTripper == nil {
 		t.Fatalf(`roundTripper.RoundTripper should not be nil`)
 	}
 }
 
 func TestRoundTripperRoundTrip(t *testing.T) {
-	// Create a mock HTTP server
-	mockServer := httptest.NewServer(netHttp.HandlerFunc(func(w netHttp.ResponseWriter, r *netHttp.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("x-mock-header", "test-value")
-		w.WriteHeader(netHttp.StatusOK)
-		fmt.Fprintln(w, `{"message": "mock response"}`)
-	}))
-	defer mockServer.Close()
+	t.Parallel()
 
-	// Initialize dependencies
-	k8sClient := fake.NewSimpleClientset()
-	settings, err := configuration.NewSettings(context.Background(), k8sClient)
-	if err != nil {
-		t.Fatalf("Unexpected error creating settings: %v", err)
-	}
-
-	headers := NewHeaders()
-	transport := NewTransport(NewTlsConfig(settings))
+	headers := NewHeaders("fakeKey")
+	transport := NewTransport(true)
 	roundTripper := NewRoundTripper(headers, transport)
 
-	// Use the mock server URL
-	request, err := NewRequest("GET", mockServer.URL, nil)
+	request, err := NewRequest("GET", "http://example.com", nil)
 	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
+		t.Fatalf(`Unexpected error: %v`, err)
 	}
 
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("x-nginx-loadbalancer-kubernetes", "nlk")
 
-	// Perform the request
 	response, err := roundTripper.RoundTrip(request)
 	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
+		t.Fatalf(`Unexpected error: %v`, err)
 	}
 
 	if response == nil {
-		t.Fatalf("Response should not be nil")
+		t.Fatalf(`response should not be nil`)
 	}
+	defer response.Body.Close()
 
-	// Validate response headers
 	headerLen := len(response.Header)
-	if headerLen <= 2 {
-		t.Fatalf("Response headers should have at least 2 elements, found %d", headerLen)
+	if headerLen <= 3 {
+		t.Fatalf(`response.Header should have at least 3 elements, found %d`, headerLen)
 	}
 }
 

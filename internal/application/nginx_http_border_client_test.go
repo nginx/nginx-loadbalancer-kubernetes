@@ -3,20 +3,25 @@
  * Use of this source code is governed by the Apache License that can be found in the LICENSE file.
  */
 
+// dupl complains about duplicates with nginx_stream_border_client_test.go
+//
+//nolint:dupl
 package application
 
 import (
+	"context"
 	"testing"
 )
 
 func TestHttpBorderClient_Delete(t *testing.T) {
-	event := buildServerUpdateEvent(deletedEventType, ClientTypeNginxHttp)
-	borderClient, nginxClient, err := buildBorderClient(ClientTypeNginxHttp)
+	t.Parallel()
+	event := buildServerUpdateEvent(deletedEventType, ClientTypeNginxHTTP)
+	borderClient, nginxClient, err := buildBorderClient(ClientTypeNginxHTTP)
 	if err != nil {
 		t.Fatalf(`error occurred creating a new border client: %v`, err)
 	}
 
-	err = borderClient.Delete(event)
+	err = borderClient.Delete(context.Background(), event)
 	if err != nil {
 		t.Fatalf(`error occurred deleting the nginx+ upstream server: %v`, err)
 	}
@@ -27,13 +32,14 @@ func TestHttpBorderClient_Delete(t *testing.T) {
 }
 
 func TestHttpBorderClient_Update(t *testing.T) {
-	event := buildServerUpdateEvent(createEventType, ClientTypeNginxHttp)
-	borderClient, nginxClient, err := buildBorderClient(ClientTypeNginxHttp)
+	t.Parallel()
+	event := buildServerUpdateEvent(createEventType, ClientTypeNginxHTTP)
+	borderClient, nginxClient, err := buildBorderClient(ClientTypeNginxHTTP)
 	if err != nil {
 		t.Fatalf(`error occurred creating a new border client: %v`, err)
 	}
 
-	err = borderClient.Update(event)
+	err = borderClient.Update(context.Background(), event)
 	if err != nil {
 		t.Fatalf(`error occurred deleting the nginx+ upstream server: %v`, err)
 	}
@@ -44,21 +50,23 @@ func TestHttpBorderClient_Update(t *testing.T) {
 }
 
 func TestHttpBorderClient_BadNginxClient(t *testing.T) {
+	t.Parallel()
 	var emptyInterface interface{}
-	_, err := NewBorderClient(ClientTypeNginxHttp, emptyInterface)
+	_, err := NewBorderClient(ClientTypeNginxHTTP, emptyInterface)
 	if err == nil {
 		t.Fatalf(`expected an error to occur when creating a new border client`)
 	}
 }
 
 func TestHttpBorderClient_DeleteReturnsError(t *testing.T) {
-	event := buildServerUpdateEvent(deletedEventType, ClientTypeNginxHttp)
-	borderClient, _, err := buildTerrorizingBorderClient(ClientTypeNginxHttp)
+	t.Parallel()
+	event := buildServerUpdateEvent(deletedEventType, ClientTypeNginxHTTP)
+	borderClient, err := buildTerrorizingBorderClient(ClientTypeNginxHTTP)
 	if err != nil {
 		t.Fatalf(`error occurred creating a new border client: %v`, err)
 	}
 
-	err = borderClient.Delete(event)
+	err = borderClient.Delete(context.Background(), event)
 
 	if err == nil {
 		t.Fatalf(`expected an error to occur when deleting the nginx+ upstream server`)
@@ -66,13 +74,14 @@ func TestHttpBorderClient_DeleteReturnsError(t *testing.T) {
 }
 
 func TestHttpBorderClient_UpdateReturnsError(t *testing.T) {
-	event := buildServerUpdateEvent(createEventType, ClientTypeNginxHttp)
-	borderClient, _, err := buildTerrorizingBorderClient(ClientTypeNginxHttp)
+	t.Parallel()
+	event := buildServerUpdateEvent(createEventType, ClientTypeNginxHTTP)
+	borderClient, err := buildTerrorizingBorderClient(ClientTypeNginxHTTP)
 	if err != nil {
 		t.Fatalf(`error occurred creating a new border client: %v`, err)
 	}
 
-	err = borderClient.Update(event)
+	err = borderClient.Update(context.Background(), event)
 
 	if err == nil {
 		t.Fatalf(`expected an error to occur when deleting the nginx+ upstream server`)

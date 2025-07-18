@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "nlk.fullname" . }}
-  namespace: nlk
+  namespace: {{ .Release.Namespace }}
   labels:
     app: nlk
 spec:
@@ -14,7 +14,16 @@ spec:
     metadata:
       labels:
         app: nlk
+{{- if .Values.global.azure }}
+        azure-extensions-usage-release-identifier: {{ .Release.Name }}
+{{- end }}
+      annotations:
+        checksum: {{ tpl (toYaml .Values.nlk) . | sha256sum }}
     spec:
+      {{- with .Values.nlk.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           image: {{ include "nlk.image" .}}
@@ -41,4 +50,17 @@ spec:
             initialDelaySeconds: {{ .Values.nlk.readyStatus.initialDelaySeconds }}
             periodSeconds: {{ .Values.nlk.readyStatus.periodSeconds }}
 {{- end }}
+          env:
+            - name: NGINXAAS_DATAPLANE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nlk.apikeyname" . }}
+                  key: nginxaasApiKey
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginxaas-loadbalancer-kubernetes
       serviceAccountName: {{ include "nlk.fullname" . }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "nlk.configName" . }}

@@ -6,13 +6,15 @@
 package probation
 
 import (
-	"github.com/nginxinc/kubernetes-nginx-ingress/test/mocks"
-	"github.com/sirupsen/logrus"
+	"log/slog"
 	"net/http"
 	"testing"
+
+	"github.com/nginxinc/kubernetes-nginx-ingress/test/mocks"
 )
 
 func TestHealthServer_HandleLive(t *testing.T) {
+	t.Parallel()
 	server := NewHealthServer()
 	writer := mocks.NewMockResponseWriter()
 	server.HandleLive(writer, nil)
@@ -23,6 +25,7 @@ func TestHealthServer_HandleLive(t *testing.T) {
 }
 
 func TestHealthServer_HandleReady(t *testing.T) {
+	t.Parallel()
 	server := NewHealthServer()
 	writer := mocks.NewMockResponseWriter()
 	server.HandleReady(writer, nil)
@@ -33,6 +36,7 @@ func TestHealthServer_HandleReady(t *testing.T) {
 }
 
 func TestHealthServer_HandleStartup(t *testing.T) {
+	t.Parallel()
 	server := NewHealthServer()
 	writer := mocks.NewMockResponseWriter()
 	server.HandleStartup(writer, nil)
@@ -43,6 +47,7 @@ func TestHealthServer_HandleStartup(t *testing.T) {
 }
 
 func TestHealthServer_HandleFailCheck(t *testing.T) {
+	t.Parallel()
 	failCheck := mocks.NewMockCheck(false)
 	server := NewHealthServer()
 	writer := mocks.NewMockResponseWriter()
@@ -55,6 +60,7 @@ func TestHealthServer_HandleFailCheck(t *testing.T) {
 }
 
 func TestHealthServer_Start(t *testing.T) {
+	t.Parallel()
 	server := NewHealthServer()
 	server.Start()
 
@@ -64,10 +70,11 @@ func TestHealthServer_Start(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
 		t.Errorf("Expected status code %v, got %v", http.StatusAccepted, response.StatusCode)
 	}
 
-	logrus.Infof("received a response from the probe server: %v", response)
+	slog.Info("received a response from the probe server", "response", response)
 }

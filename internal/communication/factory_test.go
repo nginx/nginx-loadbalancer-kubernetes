@@ -6,17 +6,15 @@
 package communication
 
 import (
-	"context"
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/configuration"
-	"k8s.io/client-go/kubernetes/fake"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func TestNewHttpClient(t *testing.T) {
-	k8sClient := fake.NewSimpleClientset()
-	settings, err := configuration.NewSettings(context.Background(), k8sClient)
-	client, err := NewHttpClient(settings)
+func TestNewHTTPClient(t *testing.T) {
+	t.Parallel()
 
+	client, err := NewHTTPClient("fakeKey", true)
 	if err != nil {
 		t.Fatalf(`Unexpected error: %v`, err)
 	}
@@ -26,14 +24,45 @@ func TestNewHttpClient(t *testing.T) {
 	}
 }
 
+//nolint:goconst
 func TestNewHeaders(t *testing.T) {
-	headers := NewHeaders()
+	t.Parallel()
+	headers := NewHeaders("fakeKey")
 
 	if headers == nil {
 		t.Fatalf(`headers should not be nil`)
 	}
 
-	if len(headers) != 2 {
+	if len(headers) != 4 {
+		t.Fatalf(`headers should have 3 elements`)
+	}
+
+	if headers[0] != "Content-Type: application/json" {
+		t.Fatalf(`headers[0] should be "Content-Type: application/json"`)
+	}
+
+	if headers[1] != "Accept: application/json" {
+		t.Fatalf(`headers[1] should be "Accept: application/json"`)
+	}
+
+	if headers[2] != "X-NLK-Version: " {
+		t.Fatalf(`headers[2] should be "X-NLK-Version: "`)
+	}
+
+	if headers[3] != "Authorization: ApiKey fakeKey" {
+		t.Fatalf(`headers[3] should be "Accept: Authorization: ApiKey fakeKey"`)
+	}
+}
+
+func TestNewHeadersWithNoAPIKey(t *testing.T) {
+	t.Parallel()
+	headers := NewHeaders("")
+
+	if headers == nil {
+		t.Fatalf(`headers should not be nil`)
+	}
+
+	if len(headers) != 3 {
 		t.Fatalf(`headers should have 2 elements`)
 	}
 
@@ -44,13 +73,16 @@ func TestNewHeaders(t *testing.T) {
 	if headers[1] != "Accept: application/json" {
 		t.Fatalf(`headers[1] should be "Accept: application/json"`)
 	}
+
+	if headers[2] != "X-NLK-Version: " {
+		t.Fatalf(`headers[2] should be "X-NLK-Version: "`)
+	}
 }
 
 func TestNewTransport(t *testing.T) {
-	k8sClient := fake.NewSimpleClientset()
-	settings, _ := configuration.NewSettings(context.Background(), k8sClient)
-	config := NewTlsConfig(settings)
-	transport := NewTransport(config)
+	t.Parallel()
+
+	transport := NewTransport(false)
 
 	if transport == nil {
 		t.Fatalf(`transport should not be nil`)
@@ -60,11 +92,5 @@ func TestNewTransport(t *testing.T) {
 		t.Fatalf(`transport.TLSClientConfig should not be nil`)
 	}
 
-	if transport.TLSClientConfig != config {
-		t.Fatalf(`transport.TLSClientConfig should be the same as config`)
-	}
-
-	if !transport.TLSClientConfig.InsecureSkipVerify {
-		t.Fatalf(`transport.TLSClientConfig.InsecureSkipVerify should be true`)
-	}
+	require.False(t, transport.TLSClientConfig.InsecureSkipVerify)
 }

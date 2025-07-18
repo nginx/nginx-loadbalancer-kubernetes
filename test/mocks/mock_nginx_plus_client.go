@@ -8,7 +8,7 @@ package mocks
 import (
 	"context"
 
-	nginxClient "github.com/nginxinc/nginx-plus-go-client/v2/client"
+	nginxClient "github.com/nginx/nginx-plus-go-client/v2/client"
 )
 
 type MockNginxClient struct {
@@ -30,7 +30,7 @@ func NewErroringMockClient(err error) *MockNginxClient {
 	}
 }
 
-func (m MockNginxClient) DeleteStreamServer(ctx context.Context, string, _ string) error {
+func (m MockNginxClient) DeleteStreamServer(_ context.Context, _ string, _ string) error {
 	m.CalledFunctions["DeleteStreamServer"] = true
 
 	if m.Error != nil {
@@ -40,7 +40,11 @@ func (m MockNginxClient) DeleteStreamServer(ctx context.Context, string, _ strin
 	return nil
 }
 
-func (m MockNginxClient) UpdateStreamServers(ctx context.Context, _ string, _ []nginxClient.StreamUpstreamServer) ([]nginxClient.StreamUpstreamServer, []nginxClient.StreamUpstreamServer, []nginxClient.StreamUpstreamServer, error) {
+func (m MockNginxClient) UpdateStreamServers(
+	_ context.Context,
+	_ string,
+	_ []nginxClient.StreamUpstreamServer,
+) ([]nginxClient.StreamUpstreamServer, []nginxClient.StreamUpstreamServer, []nginxClient.StreamUpstreamServer, error) {
 	m.CalledFunctions["UpdateStreamServers"] = true
 
 	if m.Error != nil {
@@ -50,7 +54,7 @@ func (m MockNginxClient) UpdateStreamServers(ctx context.Context, _ string, _ []
 	return nil, nil, nil, nil
 }
 
-func (m MockNginxClient) DeleteHTTPServer(ctx context.Context, _ string, _ string) error {
+func (m MockNginxClient) DeleteHTTPServer(_ context.Context, _ string, _ string) error {
 	m.CalledFunctions["DeleteHTTPServer"] = true
 
 	if m.Error != nil {
@@ -60,7 +64,11 @@ func (m MockNginxClient) DeleteHTTPServer(ctx context.Context, _ string, _ strin
 	return nil
 }
 
-func (m MockNginxClient) UpdateHTTPServers(ctx context.Context, _ string, _ []nginxClient.UpstreamServer) ([]nginxClient.UpstreamServer, []nginxClient.UpstreamServer, []nginxClient.UpstreamServer, error) {
+func (m MockNginxClient) UpdateHTTPServers(
+	_ context.Context,
+	_ string,
+	_ []nginxClient.UpstreamServer,
+) ([]nginxClient.UpstreamServer, []nginxClient.UpstreamServer, []nginxClient.UpstreamServer, error) {
 	m.CalledFunctions["UpdateHTTPServers"] = true
 
 	if m.Error != nil {

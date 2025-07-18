@@ -6,23 +6,26 @@
 package application
 
 import (
-	"github.com/nginxinc/kubernetes-nginx-ingress/test/mocks"
 	"testing"
+
+	"github.com/nginxinc/kubernetes-nginx-ingress/test/mocks"
 )
 
 func TestBorderClient_CreatesHttpBorderClient(t *testing.T) {
+	t.Parallel()
 	borderClient := mocks.MockNginxClient{}
 	client, err := NewBorderClient("http", borderClient)
 	if err != nil {
 		t.Errorf(`error creating border client: %v`, err)
 	}
 
-	if _, ok := client.(*NginxHttpBorderClient); !ok {
-		t.Errorf(`expected client to be of type NginxHttpBorderClient`)
+	if _, ok := client.(*NginxHTTPBorderClient); !ok {
+		t.Errorf(`expected client to be of type NginxHTTPBorderClient`)
 	}
 }
 
 func TestBorderClient_CreatesTcpBorderClient(t *testing.T) {
+	t.Parallel()
 	borderClient := mocks.MockNginxClient{}
 	client, err := NewBorderClient("stream", borderClient)
 	if err != nil {
@@ -35,6 +38,7 @@ func TestBorderClient_CreatesTcpBorderClient(t *testing.T) {
 }
 
 func TestBorderClient_UnknownClientType(t *testing.T) {
+	t.Parallel()
 	unknownClientType := "unknown"
 	borderClient := mocks.MockNginxClient{}
 	client, err := NewBorderClient(unknownClientType, borderClient)

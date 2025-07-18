@@ -6,10 +6,12 @@
 package communication
 
 import (
+	"errors"
 	"net/http"
-	netHttp "net/http"
 	"strings"
 )
+
+const maxHeaders = 1000
 
 // RoundTripper is a simple type that wraps the default net/communication RoundTripper to add additional headers.
 type RoundTripper struct {
@@ -18,7 +20,7 @@ type RoundTripper struct {
 }
 
 // NewRoundTripper is a factory method to create a new RoundTripper.
-func NewRoundTripper(headers []string, transport *netHttp.Transport) *RoundTripper {
+func NewRoundTripper(headers []string, transport *http.Transport) *RoundTripper {
 	return &RoundTripper{
 		Headers:      headers,
 		RoundTripper: transport,
@@ -27,6 +29,10 @@ func NewRoundTripper(headers []string, transport *netHttp.Transport) *RoundTripp
 
 // RoundTrip This simply adds our default headers to the request before passing it on to the default RoundTripper.
 func (roundTripper *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if len(req.Header) > maxHeaders {
+		return nil, errors.New("request includes too many headers")
+	}
+
 	newRequest := new(http.Request)
 	*newRequest = *req
 	newRequest.Header = make(http.Header, len(req.Header))
