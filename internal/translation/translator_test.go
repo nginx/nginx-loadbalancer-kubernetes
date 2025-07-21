@@ -7,12 +7,18 @@ package translation
 
 import (
 	"fmt"
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/configuration"
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/core"
-	v1 "k8s.io/api/core/v1"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/nginxinc/kubernetes-nginx-ingress/internal/core"
+	"github.com/nginxinc/kubernetes-nginx-ingress/pkg/pointer"
+	v1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	corelisters "k8s.io/client-go/listers/core/v1"
+	discoverylisters "k8s.io/client-go/listers/discovery/v1"
 )
 
 const (
@@ -20,6 +26,9 @@ const (
 	ManyNodes              = 7
 	NoNodes                = 0
 	OneNode                = 1
+	ManyEndpointSlices     = 7
+	NoEndpointSlices       = 0
+	OneEndpointSlice       = 1
 	TranslateErrorFormat   = "Translate() error = %v"
 )
 
@@ -28,125 +37,299 @@ const (
  */
 
 func TestCreatedTranslateNoPorts(t *testing.T) {
-	const expectedEventCount = 0
-
-	service := defaultService()
-	event := buildCreatedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	t.Parallel()
+	testcases := map[string]struct{ serviceType v1.ServiceType }{
+		"nodePort":     {v1.ServiceTypeNodePort},
+		"clusterIP":    {v1.ServiceTypeClusterIP},
+		"loadBalancer": {v1.ServiceTypeLoadBalancer},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			const expectedEventCount = 0
+
+			service := defaultService(tc.serviceType)
+			event := buildCreatedEvent(service, 0)
+
+			translator := NewTranslator(
+				NewFakeEndpointSliceLister([]*discovery.EndpointSlice{}, nil),
+				NewFakeNodeLister([]*v1.Node{}, nil),
+			)
+
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+		})
 	}
 }
 
 func TestCreatedTranslateNoInterestingPorts(t *testing.T) {
-	const expectedEventCount = 0
-	const portCount = 1
-
-	ports := generateUpdatablePorts(portCount, 0)
-	service := serviceWithPorts(ports)
-	event := buildCreatedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	t.Parallel()
+	testcases := map[string]struct{ serviceType v1.ServiceType }{
+		"nodePort":     {v1.ServiceTypeNodePort},
+		"clusterIP":    {v1.ServiceTypeClusterIP},
+		"loadBalancer": {v1.ServiceTypeLoadBalancer},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			const expectedEventCount = 0
+			const portCount = 1
+
+			ports := generateUpdatablePorts(portCount, 0)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildCreatedEvent(service, 0)
+
+			translator := NewTranslator(
+				NewFakeEndpointSliceLister([]*discovery.EndpointSlice{}, nil),
+				NewFakeNodeLister([]*v1.Node{}, nil),
+			)
+
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+		})
 	}
 }
 
+//nolint:dupl
 func TestCreatedTranslateOneInterestingPort(t *testing.T) {
-	const expectedEventCount = 1
-	const portCount = 1
-
-	ports := generatePorts(portCount)
-	service := serviceWithPorts(ports)
-	event := buildCreatedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	t.Parallel()
+	testcases := map[string]struct {
+		serviceType         v1.ServiceType
+		nodes               []*v1.Node
+		ingresses           int
+		endpoints           []*discovery.EndpointSlice
+		expectedServerCount int
+	}{
+		"nodePort": {
+			serviceType:         v1.ServiceTypeNodePort,
+			nodes:               generateNodes(OneNode),
+			expectedServerCount: OneNode,
+		},
+		"clusterIP": {
+			serviceType:         v1.ServiceTypeClusterIP,
+			endpoints:           generateEndpointSlices(OneEndpointSlice, 1, 1),
+			expectedServerCount: OneEndpointSlice,
+		},
+		"loadBalancer": {
+			serviceType:         v1.ServiceTypeLoadBalancer,
+			expectedServerCount: OneNode,
+			ingresses:           1,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	assertExpectedServerCount(t, OneNode, translatedEvents)
+			const expectedEventCount = 1
+			const portCount = 1
+
+			ports := generatePorts(portCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildCreatedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, tc.expectedServerCount, translatedEvents)
+		})
+	}
 }
 
+//nolint:dupl
 func TestCreatedTranslateManyInterestingPorts(t *testing.T) {
-	const expectedEventCount = 4
-	const portCount = 4
-
-	ports := generatePorts(portCount)
-	service := serviceWithPorts(ports)
-	event := buildCreatedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	t.Parallel()
+	testcases := map[string]struct {
+		serviceType         v1.ServiceType
+		nodes               []*v1.Node
+		ingresses           int
+		endpoints           []*discovery.EndpointSlice
+		expectedServerCount int
+	}{
+		"nodePort": {
+			serviceType:         v1.ServiceTypeNodePort,
+			nodes:               generateNodes(OneNode),
+			expectedServerCount: OneNode,
+		},
+		"clusterIP": {
+			serviceType:         v1.ServiceTypeClusterIP,
+			endpoints:           generateEndpointSlices(OneEndpointSlice, 4, 4),
+			expectedServerCount: OneEndpointSlice,
+		},
+		"loadBalancer": {
+			serviceType:         v1.ServiceTypeLoadBalancer,
+			expectedServerCount: OneNode,
+			ingresses:           1,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	assertExpectedServerCount(t, OneNode, translatedEvents)
+			const expectedEventCount = 4
+			const portCount = 4
+
+			ports := generatePorts(portCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildCreatedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, tc.expectedServerCount, translatedEvents)
+		})
+	}
 }
 
+//nolint:dupl
 func TestCreatedTranslateManyMixedPorts(t *testing.T) {
-	const expectedEventCount = 2
-	const portCount = 6
-	const updatablePortCount = 2
+	t.Parallel()
 
-	ports := generateUpdatablePorts(portCount, updatablePortCount)
-	service := serviceWithPorts(ports)
-	event := buildCreatedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType         v1.ServiceType
+		nodes               []*v1.Node
+		ingresses           int
+		endpoints           []*discovery.EndpointSlice
+		expectedServerCount int
+	}{
+		"nodePort": {
+			serviceType:         v1.ServiceTypeNodePort,
+			nodes:               generateNodes(OneNode),
+			expectedServerCount: OneNode,
+		},
+		"clusterIP": {
+			serviceType:         v1.ServiceTypeClusterIP,
+			endpoints:           generateEndpointSlices(OneEndpointSlice, 6, 2),
+			expectedServerCount: OneEndpointSlice,
+		},
+		"loadBalancer": {
+			serviceType:         v1.ServiceTypeLoadBalancer,
+			expectedServerCount: OneNode,
+			ingresses:           1,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	assertExpectedServerCount(t, OneNode, translatedEvents)
+			const expectedEventCount = 2
+			const portCount = 6
+			const updatablePortCount = 2
+
+			ports := generateUpdatablePorts(portCount, updatablePortCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildCreatedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, tc.expectedServerCount, translatedEvents)
+		})
+	}
 }
 
 func TestCreatedTranslateManyMixedPortsAndManyNodes(t *testing.T) {
-	const expectedEventCount = 2
-	const portCount = 6
-	const updatablePortCount = 2
+	t.Parallel()
 
-	ports := generateUpdatablePorts(portCount, updatablePortCount)
-	service := serviceWithPorts(ports)
-	event := buildCreatedEvent(service, ManyNodes)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType         v1.ServiceType
+		nodes               []*v1.Node
+		ingresses           int
+		endpoints           []*discovery.EndpointSlice
+		expectedServerCount int
+	}{
+		"nodePort": {
+			serviceType:         v1.ServiceTypeNodePort,
+			nodes:               generateNodes(ManyNodes),
+			expectedServerCount: ManyNodes,
+		},
+		"clusterIP": {
+			serviceType:         v1.ServiceTypeClusterIP,
+			endpoints:           generateEndpointSlices(ManyEndpointSlices, 6, 2),
+			expectedServerCount: ManyEndpointSlices,
+		},
+		"loadBalancer": {
+			serviceType:         v1.ServiceTypeLoadBalancer,
+			ingresses:           ManyNodes,
+			expectedServerCount: ManyNodes,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const expectedEventCount = 2
+			const portCount = 6
+			const updatablePortCount = 2
 
-	assertExpectedServerCount(t, ManyNodes, translatedEvents)
+			ports := generateUpdatablePorts(portCount, updatablePortCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildCreatedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, ManyNodes, translatedEvents)
+		})
+	}
 }
 
 /*
@@ -154,125 +337,326 @@ func TestCreatedTranslateManyMixedPortsAndManyNodes(t *testing.T) {
  */
 
 func TestUpdatedTranslateNoPorts(t *testing.T) {
-	const expectedEventCount = 0
+	t.Parallel()
 
-	service := defaultService()
-	event := buildUpdatedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType         v1.ServiceType
+		nodes               []*v1.Node
+		ingresses           int
+		endpoints           []*discovery.EndpointSlice
+		expectedServerCount int
+	}{
+		"nodePort": {
+			serviceType:         v1.ServiceTypeNodePort,
+			nodes:               generateNodes(OneNode),
+			expectedServerCount: OneNode,
+		},
+		"clusterIP": {
+			serviceType:         v1.ServiceTypeClusterIP,
+			endpoints:           generateEndpointSlices(OneEndpointSlice, 0, 0),
+			expectedServerCount: OneEndpointSlice,
+		},
+		"loadBalancer": {
+			serviceType:         v1.ServiceTypeLoadBalancer,
+			expectedServerCount: OneNode,
+			ingresses:           OneNode,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const expectedEventCount = 0
+
+			service := defaultService(tc.serviceType)
+			event := buildUpdatedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+		})
 	}
 }
 
 func TestUpdatedTranslateNoInterestingPorts(t *testing.T) {
-	const expectedEventCount = 0
-	const portCount = 1
+	t.Parallel()
 
-	ports := generateUpdatablePorts(portCount, 0)
-	service := serviceWithPorts(ports)
-	event := buildUpdatedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType         v1.ServiceType
+		nodes               []*v1.Node
+		ingresses           int
+		endpoints           []*discovery.EndpointSlice
+		expectedServerCount int
+	}{
+		"nodePort": {
+			serviceType:         v1.ServiceTypeNodePort,
+			nodes:               generateNodes(OneNode),
+			expectedServerCount: OneNode,
+		},
+		"clusterIP": {
+			serviceType:         v1.ServiceTypeClusterIP,
+			endpoints:           generateEndpointSlices(OneEndpointSlice, 1, 0),
+			expectedServerCount: OneEndpointSlice,
+		},
+		"loadBalancer": {
+			serviceType:         v1.ServiceTypeLoadBalancer,
+			expectedServerCount: OneNode,
+			ingresses:           OneNode,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const expectedEventCount = 0
+			const portCount = 1
+
+			ports := generateUpdatablePorts(portCount, 0)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildUpdatedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+		})
 	}
 }
 
 func TestUpdatedTranslateOneInterestingPort(t *testing.T) {
-	const expectedEventCount = 1
-	const portCount = 1
+	t.Parallel()
 
-	ports := generatePorts(portCount)
-	service := serviceWithPorts(ports)
-	event := buildUpdatedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType         v1.ServiceType
+		nodes               []*v1.Node
+		ingresses           int
+		endpoints           []*discovery.EndpointSlice
+		expectedServerCount int
+	}{
+		"nodePort": {
+			serviceType:         v1.ServiceTypeNodePort,
+			nodes:               generateNodes(OneNode),
+			expectedServerCount: OneNode,
+		},
+		"clusterIP": {
+			serviceType:         v1.ServiceTypeClusterIP,
+			endpoints:           generateEndpointSlices(OneEndpointSlice, 1, 1),
+			expectedServerCount: OneEndpointSlice,
+		},
+		"loadBalancer": {
+			serviceType:         v1.ServiceTypeLoadBalancer,
+			expectedServerCount: OneNode,
+			ingresses:           OneNode,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const expectedEventCount = 1
+			const portCount = 1
 
-	assertExpectedServerCount(t, OneNode, translatedEvents)
+			ports := generatePorts(portCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildUpdatedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, OneNode, translatedEvents)
+		})
+	}
 }
 
+//nolint:dupl
 func TestUpdatedTranslateManyInterestingPorts(t *testing.T) {
-	const expectedEventCount = 4
-	const portCount = 4
+	t.Parallel()
 
-	ports := generatePorts(portCount)
-	service := serviceWithPorts(ports)
-	event := buildUpdatedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType         v1.ServiceType
+		nodes               []*v1.Node
+		ingresses           int
+		endpoints           []*discovery.EndpointSlice
+		expectedServerCount int
+	}{
+		"nodePort": {
+			serviceType:         v1.ServiceTypeNodePort,
+			nodes:               generateNodes(OneNode),
+			expectedServerCount: OneNode,
+		},
+		"clusterIP": {
+			serviceType:         v1.ServiceTypeClusterIP,
+			endpoints:           generateEndpointSlices(OneEndpointSlice, 4, 4),
+			expectedServerCount: OneEndpointSlice,
+		},
+		"loadBalancer": {
+			serviceType:         v1.ServiceTypeLoadBalancer,
+			expectedServerCount: OneNode,
+			ingresses:           OneNode,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const expectedEventCount = 4
+			const portCount = 4
 
-	assertExpectedServerCount(t, OneNode, translatedEvents)
+			ports := generatePorts(portCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildUpdatedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, tc.expectedServerCount, translatedEvents)
+		})
+	}
 }
 
+//nolint:dupl
 func TestUpdatedTranslateManyMixedPorts(t *testing.T) {
-	const expectedEventCount = 2
-	const portCount = 6
-	const updatablePortCount = 2
+	t.Parallel()
 
-	ports := generateUpdatablePorts(portCount, updatablePortCount)
-	service := serviceWithPorts(ports)
-	event := buildUpdatedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType         v1.ServiceType
+		nodes               []*v1.Node
+		ingresses           int
+		endpoints           []*discovery.EndpointSlice
+		expectedServerCount int
+	}{
+		"nodePort": {
+			serviceType:         v1.ServiceTypeNodePort,
+			nodes:               generateNodes(OneNode),
+			expectedServerCount: OneNode,
+		},
+		"clusterIP": {
+			serviceType:         v1.ServiceTypeClusterIP,
+			endpoints:           generateEndpointSlices(OneEndpointSlice, 6, 2),
+			expectedServerCount: OneEndpointSlice,
+		},
+		"loadBalancer": {
+			serviceType:         v1.ServiceTypeLoadBalancer,
+			expectedServerCount: OneNode,
+			ingresses:           OneNode,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const expectedEventCount = 2
+			const portCount = 6
+			const updatablePortCount = 2
 
-	assertExpectedServerCount(t, OneNode, translatedEvents)
+			ports := generateUpdatablePorts(portCount, updatablePortCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildUpdatedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, tc.expectedServerCount, translatedEvents)
+		})
+	}
 }
 
+//nolint:dupl
 func TestUpdatedTranslateManyMixedPortsAndManyNodes(t *testing.T) {
-	const expectedEventCount = 2
-	const portCount = 6
-	const updatablePortCount = 2
+	t.Parallel()
 
-	ports := generateUpdatablePorts(portCount, updatablePortCount)
-	service := serviceWithPorts(ports)
-	event := buildUpdatedEvent(service, ManyNodes)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType         v1.ServiceType
+		nodes               []*v1.Node
+		ingresses           int
+		endpoints           []*discovery.EndpointSlice
+		expectedServerCount int
+	}{
+		"nodePort": {
+			serviceType:         v1.ServiceTypeNodePort,
+			nodes:               generateNodes(ManyNodes),
+			expectedServerCount: ManyNodes,
+		},
+		"clusterIP": {
+			serviceType:         v1.ServiceTypeClusterIP,
+			endpoints:           generateEndpointSlices(ManyEndpointSlices, 6, 2),
+			expectedServerCount: ManyEndpointSlices,
+		},
+		"loadBalancer": {
+			serviceType:         v1.ServiceTypeLoadBalancer,
+			expectedServerCount: ManyNodes,
+			ingresses:           ManyNodes,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const expectedEventCount = 2
+			const portCount = 6
+			const updatablePortCount = 2
 
-	assertExpectedServerCount(t, ManyNodes, translatedEvents)
+			ports := generateUpdatablePorts(portCount, updatablePortCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildUpdatedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, tc.expectedServerCount, translatedEvents)
+		})
+	}
 }
 
 /*
@@ -280,316 +664,749 @@ func TestUpdatedTranslateManyMixedPortsAndManyNodes(t *testing.T) {
  */
 
 func TestDeletedTranslateNoPortsAndNoNodes(t *testing.T) {
-	const expectedEventCount = 0
+	t.Parallel()
 
-	service := defaultService()
-	event := buildDeletedEvent(service, NoNodes)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	assertExpectedServerCount(t, ManyNodes, translatedEvents)
+			const expectedEventCount = 0
+
+			service := defaultService(tc.serviceType)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
 func TestDeletedTranslateNoInterestingPortsAndNoNodes(t *testing.T) {
-	const expectedEventCount = 0
-	const portCount = 1
+	t.Parallel()
 
-	ports := generateUpdatablePorts(portCount, 0)
-	service := serviceWithPorts(ports)
-	event := buildDeletedEvent(service, NoNodes)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const expectedEventCount = 0
+			const portCount = 1
 
-	assertExpectedServerCount(t, ManyNodes, translatedEvents)
+			ports := generateUpdatablePorts(portCount, 0)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
+//nolint:dupl
 func TestDeletedTranslateOneInterestingPortAndNoNodes(t *testing.T) {
-	const expectedEventCount = 0
-	const portCount = 1
+	t.Parallel()
 
-	ports := generatePorts(portCount)
-	service := serviceWithPorts(ports)
-	event := buildDeletedEvent(service, NoNodes)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+			endpoints:   generateEndpointSlices(0, 1, 1),
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	assertExpectedServerCount(t, ManyNodes, translatedEvents)
+			const expectedEventCount = 1
+			const portCount = 1
+
+			ports := generatePorts(portCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
+//nolint:dupl
 func TestDeletedTranslateManyInterestingPortsAndNoNodes(t *testing.T) {
-	const expectedEventCount = 0
-	const portCount = 4
+	t.Parallel()
 
-	ports := generatePorts(portCount)
-	service := serviceWithPorts(ports)
-	event := buildDeletedEvent(service, NoNodes)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+			endpoints:   generateEndpointSlices(0, 4, 4),
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const portCount = 4
+			const expectedEventCount = 4
 
-	assertExpectedServerCount(t, ManyNodes, translatedEvents)
+			ports := generatePorts(portCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
 func TestDeletedTranslateManyMixedPortsAndNoNodes(t *testing.T) {
-	const expectedEventCount = 0
-	const portCount = 6
-	const updatablePortCount = 2
+	t.Parallel()
 
-	ports := generateUpdatablePorts(portCount, updatablePortCount)
-	service := serviceWithPorts(ports)
-	event := buildDeletedEvent(service, NoNodes)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+			endpoints:   generateEndpointSlices(0, 6, 2),
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	assertExpectedServerCount(t, ManyNodes, translatedEvents)
+			const portCount = 6
+			const updatablePortCount = 2
+			const expectedEventCount = 2
+
+			ports := generateUpdatablePorts(portCount, updatablePortCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
+//nolint:dupl
 func TestDeletedTranslateNoPortsAndOneNode(t *testing.T) {
-	const expectedEventCount = 0
+	t.Parallel()
 
-	service := defaultService()
-	event := buildDeletedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+			nodes:       generateNodes(OneNode),
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+			endpoints:   generateEndpointSlices(OneEndpointSlice, 0, 0),
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+			ingresses:   OneNode,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	assertExpectedServerCount(t, ManyNodes, translatedEvents)
+			const expectedEventCount = 0
+
+			service := defaultService(tc.serviceType)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
 func TestDeletedTranslateNoInterestingPortsAndOneNode(t *testing.T) {
-	const expectedEventCount = 0
-	const portCount = 1
+	t.Parallel()
 
-	ports := generateUpdatablePorts(portCount, 0)
-	service := serviceWithPorts(ports)
-	event := buildDeletedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+			nodes:       generateNodes(OneNode),
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+			endpoints:   generateEndpointSlices(OneEndpointSlice, 1, 0),
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+			ingresses:   OneNode,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const portCount = 1
+			const expectedEventCount = 0
 
-	assertExpectedServerCount(t, ManyNodes, translatedEvents)
+			ports := generateUpdatablePorts(portCount, 0)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
+//nolint:dupl
 func TestDeletedTranslateOneInterestingPortAndOneNode(t *testing.T) {
-	const expectedEventCount = 1
-	const portCount = 1
+	t.Parallel()
 
-	ports := generatePorts(portCount)
-	service := serviceWithPorts(ports)
-	event := buildDeletedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+			nodes:       generateNodes(OneNode),
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+			endpoints:   generateEndpointSlices(OneEndpointSlice, 1, 1),
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+			ingresses:   OneNode,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	assertExpectedServerCount(t, OneNode, translatedEvents)
+			const portCount = 1
+			const expectedEventCount = 1
+
+			ports := generatePorts(portCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
+//nolint:dupl
 func TestDeletedTranslateManyInterestingPortsAndOneNode(t *testing.T) {
-	const expectedEventCount = 4
-	const portCount = 4
+	t.Parallel()
 
-	ports := generatePorts(portCount)
-	service := serviceWithPorts(ports)
-	event := buildDeletedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+			nodes:       generateNodes(OneNode),
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+			endpoints:   generateEndpointSlices(OneEndpointSlice, 4, 4),
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+			ingresses:   OneNode,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	assertExpectedServerCount(t, OneNode, translatedEvents)
+			const portCount = 4
+			const expectedEventCount = 4
+
+			ports := generatePorts(portCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
 func TestDeletedTranslateManyMixedPortsAndOneNode(t *testing.T) {
-	const expectedEventCount = 2
-	const portCount = 6
-	const updatablePortCount = 2
+	t.Parallel()
 
-	ports := generateUpdatablePorts(portCount, updatablePortCount)
-	service := serviceWithPorts(ports)
-	event := buildDeletedEvent(service, OneNode)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+			nodes:       generateNodes(OneNode),
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+			endpoints:   generateEndpointSlices(OneEndpointSlice, 6, 2),
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+			ingresses:   OneNode,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const portCount = 6
+			const updatablePortCount = 2
+			const expectedEventCount = 2
 
-	assertExpectedServerCount(t, OneNode, translatedEvents)
+			ports := generateUpdatablePorts(portCount, updatablePortCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
+//nolint:dupl
 func TestDeletedTranslateNoPortsAndManyNodes(t *testing.T) {
-	const expectedEventCount = 0
+	t.Parallel()
 
-	service := defaultService()
-	event := buildDeletedEvent(service, ManyNodes)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+			nodes:       generateNodes(ManyNodes),
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+			endpoints:   generateEndpointSlices(ManyEndpointSlices, 0, 0),
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+			ingresses:   ManyNodes,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const expectedEventCount = 0
 
-	assertExpectedServerCount(t, ManyNodes, translatedEvents)
+			service := defaultService(tc.serviceType)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
 func TestDeletedTranslateNoInterestingPortsAndManyNodes(t *testing.T) {
-	const portCount = 1
-	const updatablePortCount = 0
-	const expectedEventCount = updatablePortCount * ManyNodes
+	t.Parallel()
 
-	ports := generateUpdatablePorts(portCount, updatablePortCount)
-	service := serviceWithPorts(ports)
-	event := buildDeletedEvent(service, ManyNodes)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+			nodes:       generateNodes(ManyNodes),
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+			endpoints:   generateEndpointSlices(ManyEndpointSlices, 1, 0),
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+			ingresses:   ManyNodes,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const portCount = 1
+			const updatablePortCount = 0
+			const expectedEventCount = updatablePortCount * ManyNodes
 
-	assertExpectedServerCount(t, ManyNodes, translatedEvents)
+			ports := generateUpdatablePorts(portCount, updatablePortCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
+//nolint:dupl
 func TestDeletedTranslateOneInterestingPortAndManyNodes(t *testing.T) {
-	const portCount = 1
-	const expectedEventCount = portCount * ManyNodes
+	t.Parallel()
 
-	ports := generatePorts(portCount)
-	service := serviceWithPorts(ports)
-	event := buildDeletedEvent(service, ManyNodes)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+			nodes:       generateNodes(ManyNodes),
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+			endpoints:   generateEndpointSlices(ManyEndpointSlices, 1, 1),
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+			ingresses:   ManyNodes,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const portCount = 1
+			const expectedEventCount = 1
 
-	assertExpectedServerCount(t, OneNode, translatedEvents)
+			ports := generatePorts(portCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
+//nolint:dupl
 func TestDeletedTranslateManyInterestingPortsAndManyNodes(t *testing.T) {
-	const portCount = 4
-	const expectedEventCount = portCount * ManyNodes
+	t.Parallel()
 
-	ports := generatePorts(portCount)
-	service := serviceWithPorts(ports)
-	event := buildDeletedEvent(service, ManyNodes)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+			nodes:       generateNodes(ManyNodes),
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+			endpoints:   generateEndpointSlices(ManyEndpointSlices, 4, 4),
+		},
+		"loadBalancer": {
+			serviceType: v1.ServiceTypeLoadBalancer,
+			ingresses:   ManyNodes,
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const portCount = 4
+			const expectedEventCount = 4
 
-	assertExpectedServerCount(t, OneNode, translatedEvents)
+			ports := generatePorts(portCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
 func TestDeletedTranslateManyMixedPortsAndManyNodes(t *testing.T) {
-	const portCount = 6
-	const updatablePortCount = 2
-	const expectedEventCount = updatablePortCount * ManyNodes
+	t.Parallel()
 
-	ports := generateUpdatablePorts(portCount, updatablePortCount)
-	service := serviceWithPorts(ports)
-	event := buildDeletedEvent(service, ManyNodes)
-
-	translatedEvents, err := Translate(&event)
-	if err != nil {
-		t.Fatalf(TranslateErrorFormat, err)
+	testcases := map[string]struct {
+		serviceType v1.ServiceType
+		nodes       []*v1.Node
+		endpoints   []*discovery.EndpointSlice
+		ingresses   int
+	}{
+		"nodePort": {
+			serviceType: v1.ServiceTypeNodePort,
+			nodes:       generateNodes(ManyNodes),
+		},
+		"clusterIP": {
+			serviceType: v1.ServiceTypeClusterIP,
+			endpoints:   generateEndpointSlices(ManyEndpointSlices, 6, 2),
+		},
 	}
 
-	actualEventCount := len(translatedEvents)
-	if actualEventCount != expectedEventCount {
-		t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
-	}
+	for name, tc := range testcases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			const portCount = 6
+			const updatablePortCount = 2
+			const expectedEventCount = 2
 
-	assertExpectedServerCount(t, OneNode, translatedEvents)
+			ports := generateUpdatablePorts(portCount, updatablePortCount)
+			service := serviceWithPorts(tc.serviceType, ports)
+			event := buildDeletedEvent(service, tc.ingresses)
+
+			translator := NewTranslator(NewFakeEndpointSliceLister(tc.endpoints, nil), NewFakeNodeLister(tc.nodes, nil))
+			translatedEvents, err := translator.Translate(&event)
+			if err != nil {
+				t.Fatalf(TranslateErrorFormat, err)
+			}
+
+			actualEventCount := len(translatedEvents)
+			if actualEventCount != expectedEventCount {
+				t.Fatalf(AssertionFailureFormat, expectedEventCount, actualEventCount)
+			}
+
+			assertExpectedServerCount(t, 0, translatedEvents)
+		})
+	}
 }
 
 func assertExpectedServerCount(t *testing.T, expectedCount int, events core.ServerUpdateEvents) {
@@ -601,46 +1418,102 @@ func assertExpectedServerCount(t *testing.T, expectedCount int, events core.Serv
 	}
 }
 
-func defaultService() *v1.Service {
-	return &v1.Service{}
+func defaultService(serviceType v1.ServiceType) *v1.Service {
+	return &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "default-service",
+			Labels: map[string]string{"kubernetes.io/service-name": "default-service"},
+		},
+		Spec: v1.ServiceSpec{
+			Type: serviceType,
+		},
+	}
 }
 
-func serviceWithPorts(ports []v1.ServicePort) *v1.Service {
+func serviceWithPorts(serviceType v1.ServiceType, ports []v1.ServicePort) *v1.Service {
 	return &v1.Service{
 		Spec: v1.ServiceSpec{
+			Type:  serviceType,
 			Ports: ports,
 		},
 	}
 }
 
-func buildCreatedEvent(service *v1.Service, nodeCount int) core.Event {
-	return buildEvent(core.Created, service, nodeCount)
+func buildCreatedEvent(service *v1.Service, ingressCount int) core.Event {
+	return buildEvent(core.Created, service, ingressCount)
 }
 
-func buildDeletedEvent(service *v1.Service, nodeCount int) core.Event {
-	return buildEvent(core.Deleted, service, nodeCount)
+func buildDeletedEvent(service *v1.Service, ingressCount int) core.Event {
+	return buildEvent(core.Deleted, service, ingressCount)
 }
 
-func buildUpdatedEvent(service *v1.Service, nodeCount int) core.Event {
-	return buildEvent(core.Updated, service, nodeCount)
+func buildUpdatedEvent(service *v1.Service, ingressCount int) core.Event {
+	return buildEvent(core.Updated, service, ingressCount)
 }
 
-func buildEvent(eventType core.EventType, service *v1.Service, nodeCount int) core.Event {
-	previousService := defaultService()
-
-	nodeIps := generateNodeIps(nodeCount)
-
-	return core.NewEvent(eventType, service, previousService, nodeIps)
+func buildEvent(eventType core.EventType, service *v1.Service, ingressCount int) core.Event {
+	event := core.NewEvent(eventType, service)
+	event.Service.Name = "default-service"
+	ingresses := make([]v1.LoadBalancerIngress, 0, ingressCount)
+	for i := range ingressCount {
+		ingress := v1.LoadBalancerIngress{IP: fmt.Sprintf("ipAddress%d", i)}
+		ingresses = append(ingresses, ingress)
+	}
+	event.Service.Status.LoadBalancer.Ingress = ingresses
+	return event
 }
 
-func generateNodeIps(count int) []string {
-	var nodeIps []string
-
+func generateNodes(count int) (nodes []*v1.Node) {
 	for i := 0; i < count; i++ {
-		nodeIps = append(nodeIps, fmt.Sprintf("10.0.0.%v", i))
+		nodes = append(nodes, &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf("node%d", i),
+			},
+			Status: v1.NodeStatus{
+				Addresses: []v1.NodeAddress{
+					{
+						Type:    v1.NodeInternalIP,
+						Address: fmt.Sprintf("10.0.0.%v", i),
+					},
+				},
+			},
+		})
 	}
 
-	return nodeIps
+	return nodes
+}
+
+func generateEndpointSlices(endpointCount, portCount, updatablePortCount int,
+) (endpointSlices []*discovery.EndpointSlice) {
+	servicePorts := generateUpdatablePorts(portCount, updatablePortCount)
+
+	ports := make([]discovery.EndpointPort, 0, len(servicePorts))
+	for _, servicePort := range servicePorts {
+		ports = append(ports, discovery.EndpointPort{
+			Name: pointer.To(servicePort.Name),
+			Port: pointer.To(int32(8080)),
+		})
+	}
+
+	var endpoints []discovery.Endpoint
+	for i := 0; i < endpointCount; i++ {
+		endpoints = append(endpoints, discovery.Endpoint{
+			Addresses: []string{
+				fmt.Sprintf("10.0.0.%v", i),
+			},
+		})
+	}
+
+	endpointSlices = append(endpointSlices, &discovery.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "endpointSlice",
+			Labels: map[string]string{"kubernetes.io/service-name": "default-service"},
+		},
+		Endpoints: endpoints,
+		Ports:     ports,
+	})
+
+	return endpointSlices
 }
 
 func generatePorts(portCount int) []v1.ServicePort {
@@ -649,20 +1522,24 @@ func generatePorts(portCount int) []v1.ServicePort {
 
 // This is probably A Little Bit of Too Much™, but helps to ensure ordering is not a factor.
 func generateUpdatablePorts(portCount int, updatableCount int) []v1.ServicePort {
-	var ports []v1.ServicePort
+	ports := []v1.ServicePort{}
 
 	updatable := make([]string, updatableCount)
 	nonupdatable := make([]string, portCount-updatableCount)
+	contexts := []string{"http-", "stream-"}
 
 	for i := range updatable {
-		updatable[i] = configuration.NlkPrefix
+		randomIndex := int(rand.Float32() * 2.0)
+		updatable[i] = contexts[randomIndex]
 	}
 
 	for j := range nonupdatable {
 		nonupdatable[j] = "olm-"
 	}
 
-	prefixes := append(updatable, nonupdatable...)
+	var prefixes []string
+	prefixes = append(prefixes, updatable...)
+	prefixes = append(prefixes, nonupdatable...)
 
 	source := rand.NewSource(time.Now().UnixNano())
 	random := rand.New(source)
@@ -670,9 +1547,54 @@ func generateUpdatablePorts(portCount int, updatableCount int) []v1.ServicePort 
 
 	for i, prefix := range prefixes {
 		ports = append(ports, v1.ServicePort{
-			Name: fmt.Sprintf("%sport-%d", prefix, i),
+			Name: fmt.Sprintf("%supstream%d", prefix, i),
 		})
 	}
 
 	return ports
+}
+
+func NewFakeEndpointSliceLister(list []*discovery.EndpointSlice, err error) discoverylisters.EndpointSliceLister {
+	return &endpointSliceLister{
+		list: list,
+		err:  err,
+	}
+}
+
+func NewFakeNodeLister(list []*v1.Node, err error) corelisters.NodeLister {
+	return &nodeLister{
+		list: list,
+		err:  err,
+	}
+}
+
+type nodeLister struct {
+	list []*v1.Node
+	err  error
+}
+
+func (l *nodeLister) List(selector labels.Selector) (ret []*v1.Node, err error) {
+	return l.list, l.err
+}
+
+// currently unused
+func (l *nodeLister) Get(name string) (*v1.Node, error) {
+	return nil, nil
+}
+
+type endpointSliceLister struct {
+	list []*discovery.EndpointSlice
+	err  error
+}
+
+func (l *endpointSliceLister) List(selector labels.Selector) (ret []*discovery.EndpointSlice, err error) {
+	return l.list, l.err
+}
+
+func (l *endpointSliceLister) Get(name string) (*discovery.EndpointSlice, error) {
+	return nil, nil
+}
+
+func (l *endpointSliceLister) EndpointSlices(name string) discoverylisters.EndpointSliceNamespaceLister {
+	return l
 }

@@ -1,14 +1,17 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: nlk-config
-  namespace: nlk
+  name: {{ include "nlk.configName" . }}
+  namespace: {{ .Release.Namespace }}
 data:
-{{- if .Values.nlk.config.entries.hosts }}
-  nginx-hosts: "{{ .Values.nlk.config.entries.hosts }}"
+  config.yaml: |
+{{- with .Values.nlk.config.logLevel }}
+    log-level: "{{ . }}"
 {{- end }}
-  tls-mode: "{{ index .Values.nlk.defaultTLS "tls-mode" }}"
-  ca-certificate: "{{ index .Values.nlk.defaultTLS "ca-certificate" }}"
-  client-certificate: "{{ index .Values.nlk.defaultTLS "client-certificate" }}"
-  log-level: "{{ .Values.nlk.logLevel }}"
-
+{{- with .Values.nlk.config.nginxHosts }}
+    nginx-hosts: {{ toJson . }}
+{{- end }}
+    tls-mode: "{{ .Values.nlk.config.tls.mode }}"
+{{- with .Values.nlk.config.serviceAnnotationMatch }}
+    service-annotation-match: "{{ . }}"
+{{- end }}

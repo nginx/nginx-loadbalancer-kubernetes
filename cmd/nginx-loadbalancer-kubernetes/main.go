@@ -8,23 +8,27 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/nginxinc/kubernetes-nginx-ingress/internal/configuration"
 	"github.com/nginxinc/kubernetes-nginx-ingress/internal/observation"
 	"github.com/nginxinc/kubernetes-nginx-ingress/internal/probation"
 	"github.com/nginxinc/kubernetes-nginx-ingress/internal/synchronization"
-	"github.com/sirupsen/logrus"
+	"github.com/nginxinc/kubernetes-nginx-ingress/internal/translation"
+	"github.com/nginxinc/kubernetes-nginx-ingress/pkg/buildinfo"
+	"golang.org/x/sync/errgroup"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
 )
 
 func main() {
 	err := run()
 	if err != nil {
-		logrus.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 }
 
@@ -37,96 +41,104 @@ func run() error {
 		return fmt.Errorf(`error building a Kubernetes client: %w`, err)
 	}
 
-	settings, err := configuration.NewSettings(ctx, k8sClient)
+	settings, err := configuration.Read("config.yaml", "/etc/nginxaas-loadbalancer-kubernetes")
 	if err != nil {
-		return fmt.Errorf(`error occurred creating settings: %w`, err)
+		return fmt.Errorf(`error occurred accessing configuration: %w`, err)
 	}
 
-	err = settings.Initialize()
-	if err != nil {
-		return fmt.Errorf(`error occurred initializing settings: %w`, err)
-	}
+	initializeLogger(settings.LogLevel)
 
-	go settings.Run()
+	synchronizerWorkqueue := buildWorkQueue(settings.Synchronizer.WorkQueueSettings)
 
-	synchronizerWorkqueue, err := buildWorkQueue(settings.Synchronizer.WorkQueueSettings)
-	if err != nil {
-		return fmt.Errorf(`error occurred building a workqueue: %w`, err)
-	}
+	factory := informers.NewSharedInformerFactoryWithOptions(
+		k8sClient, settings.Watcher.ResyncPeriod,
+	)
 
-	synchronizer, err := synchronization.NewSynchronizer(settings, synchronizerWorkqueue)
+	serviceInformer := factory.Core().V1().Services()
+	endpointSliceInformer := factory.Discovery().V1().EndpointSlices()
+	endpointSliceLister := endpointSliceInformer.Lister()
+	nodesInformer := factory.Core().V1().Nodes()
+	nodesLister := nodesInformer.Lister()
+
+	translator := translation.NewTranslator(endpointSliceLister, nodesLister)
+
+	synchronizer, err := synchronization.NewSynchronizer(
+		settings, synchronizerWorkqueue, translator, serviceInformer.Lister())
 	if err != nil {
 		return fmt.Errorf(`error initializing synchronizer: %w`, err)
 	}
 
-	handlerWorkqueue, err := buildWorkQueue(settings.Synchronizer.WorkQueueSettings)
-	if err != nil {
-		return fmt.Errorf(`error occurred building a workqueue: %w`, err)
-	}
-
-	handler := observation.NewHandler(settings, synchronizer, handlerWorkqueue)
-
-	watcher, err := observation.NewWatcher(settings, handler)
+	watcher, err := observation.NewWatcher(settings, synchronizer, serviceInformer, endpointSliceInformer, nodesInformer)
 	if err != nil {
 		return fmt.Errorf(`error occurred creating a watcher: %w`, err)
 	}
 
-	err = watcher.Initialize()
-	if err != nil {
-		return fmt.Errorf(`error occurred initializing the watcher: %w`, err)
+	factory.Start(ctx.Done())
+	results := factory.WaitForCacheSync(ctx.Done())
+	for name, success := range results {
+		if !success {
+			return fmt.Errorf(`error occurred waiting for cache sync for %s`, name)
+		}
 	}
 
-	go handler.Run(ctx.Done())
-	go synchronizer.Run(ctx.Done())
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error { return synchronizer.Run(ctx) })
 
 	probeServer := probation.NewHealthServer()
 	probeServer.Start()
 
-	err = watcher.Watch()
-	if err != nil {
-		return fmt.Errorf(`error occurred watching for events: %w`, err)
-	}
+	g.Go(func() error { return watcher.Run(ctx) })
 
-	<-ctx.Done()
-	return nil
+	err = g.Wait()
+	return err
 }
 
-// buildKubernetesClient builds a Kubernetes clientset, supporting both in-cluster and out-of-cluster (kubeconfig) configurations.
-func buildKubernetesClient() (*kubernetes.Clientset, error) {
-	var config *rest.Config
-	var err error
+func initializeLogger(logLevel string) {
+	programLevel := new(slog.LevelVar)
 
-	// Try in-cluster config first
-	config, err = rest.InClusterConfig()
-	if err != nil {
-		if err == rest.ErrNotInCluster {
-			// Not running in a cluster, fall back to kubeconfig
-			kubeconfigPath := os.Getenv("KUBECONFIG")
-			if kubeconfigPath == "" {
-				kubeconfigPath = clientcmd.RecommendedHomeFile // ~/.kube/config
-			}
-
-			config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-			if err != nil {
-				return nil, fmt.Errorf("could not get Kubernetes config: %w", err)
-			}
-		} else {
-			return nil, fmt.Errorf("error occurred getting the in-cluster config: %w", err)
-		}
+	switch logLevel {
+	case "error":
+		programLevel.Set(slog.LevelError)
+	case "warn":
+		programLevel.Set(slog.LevelWarn)
+	case "info":
+		programLevel.Set(slog.LevelInfo)
+	case "debug":
+		programLevel.Set(slog.LevelDebug)
+	default:
+		programLevel.Set(slog.LevelWarn)
 	}
 
-	// Create the clientset
-	client, err := kubernetes.NewForConfig(config)
+	handler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: programLevel})
+	logger := slog.New(handler).With("version", buildinfo.SemVer())
+	slog.SetDefault(logger)
+	slog.Debug("Settings::setLogLevel", slog.String("level", logLevel))
+}
+
+func buildKubernetesClient() (*kubernetes.Clientset, error) {
+	slog.Debug("Watcher::buildKubernetesClient")
+	k8sConfig, err := rest.InClusterConfig()
+	if err == rest.ErrNotInCluster {
+		return nil, fmt.Errorf(`not running in a Cluster: %w`, err)
+	} else if err != nil {
+		return nil, fmt.Errorf(`error occurred getting the Cluster config: %w`, err)
+	}
+
+	client, err := kubernetes.NewForConfig(k8sConfig)
 	if err != nil {
-		return nil, fmt.Errorf("error occurred creating a Kubernetes client: %w", err)
+		return nil, fmt.Errorf(`error occurred creating a client: %w`, err)
 	}
 
 	return client, nil
 }
 
-func buildWorkQueue(settings configuration.WorkQueueSettings) (workqueue.RateLimitingInterface, error) {
-	logrus.Debug("Watcher::buildSynchronizerWorkQueue")
+func buildWorkQueue(settings configuration.WorkQueueSettings,
+) workqueue.TypedRateLimitingInterface[synchronization.ServiceKey] {
+	slog.Debug("Watcher::buildSynchronizerWorkQueue")
 
-	rateLimiter := workqueue.NewItemExponentialFailureRateLimiter(settings.RateLimiterBase, settings.RateLimiterMax)
-	return workqueue.NewNamedRateLimitingQueue(rateLimiter, settings.Name), nil
+	rateLimiter := workqueue.NewTypedItemExponentialFailureRateLimiter[synchronization.ServiceKey](
+		settings.RateLimiterBase, settings.RateLimiterMax)
+	return workqueue.NewTypedRateLimitingQueueWithConfig(
+		rateLimiter, workqueue.TypedRateLimitingQueueConfig[synchronization.ServiceKey]{Name: settings.Name})
 }

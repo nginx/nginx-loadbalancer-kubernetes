@@ -6,17 +6,18 @@
 package observation
 
 import (
-	"errors"
+	"context"
 	"fmt"
-	"time"
+	"log/slog"
 
 	"github.com/nginxinc/kubernetes-nginx-ingress/internal/configuration"
 	"github.com/nginxinc/kubernetes-nginx-ingress/internal/core"
-	"github.com/sirupsen/logrus"
+	"github.com/nginxinc/kubernetes-nginx-ingress/internal/synchronization"
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	discovery "k8s.io/api/discovery/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/informers"
+	coreinformers "k8s.io/client-go/informers/core/v1"
+	discoveryinformers "k8s.io/client-go/informers/discovery/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -24,182 +25,285 @@ import (
 // Particularly, Services in the namespace defined in the WatcherSettings::NginxIngressNamespace setting.
 // When a change is detected, an Event is generated and added to the Handler's queue.
 type Watcher struct {
-
-	// eventHandlerRegistration is used to track the event handlers
-	eventHandlerRegistration interface{}
-
-	// handler is the event handler
-	handler HandlerInterface
-
-	// informer is the informer used to watch for changes to Kubernetes resources
-	informer cache.SharedIndexInformer
+	synchronizer synchronization.Interface
 
 	// settings is the configuration settings
-	settings *configuration.Settings
+	settings configuration.Settings
+
+	// servicesInformer is the informer used to watch for changes to services
+	servicesInformer cache.SharedIndexInformer
+
+	// endpointSliceInformer is the informer used to watch for changes to endpoint slices
+	endpointSliceInformer cache.SharedIndexInformer
+
+	// nodesInformer is the informer used to watch for changes to nodes
+	nodesInformer cache.SharedIndexInformer
+
+	register *register
 }
 
 // NewWatcher creates a new Watcher
-func NewWatcher(settings *configuration.Settings, handler HandlerInterface) (*Watcher, error) {
-	return &Watcher{
-		handler:  handler,
-		settings: settings,
-	}, nil
-}
-
-// Initialize initializes the Watcher, must be called before Watch
-func (w *Watcher) Initialize() error {
-	logrus.Debug("Watcher::Initialize")
-	var err error
-
-	w.informer, err = w.buildInformer()
-	if err != nil {
-		return fmt.Errorf(`initialization error: %w`, err)
+func NewWatcher(
+	settings configuration.Settings,
+	synchronizer synchronization.Interface,
+	serviceInformer coreinformers.ServiceInformer,
+	endpointSliceInformer discoveryinformers.EndpointSliceInformer,
+	nodeInformer coreinformers.NodeInformer,
+) (*Watcher, error) {
+	if serviceInformer == nil {
+		return nil, fmt.Errorf("service informer cannot be nil")
 	}
 
-	err = w.initializeEventListeners()
-	if err != nil {
-		return fmt.Errorf(`initialization error: %w`, err)
+	if endpointSliceInformer == nil {
+		return nil, fmt.Errorf("endpoint slice informer cannot be nil")
 	}
 
-	return nil
-}
-
-// Watch starts the process of watching for changes to Kubernetes resources.
-// Initialize must be called before Watch.
-func (w *Watcher) Watch() error {
-	logrus.Debug("Watcher::Watch")
-
-	if w.informer == nil {
-		return errors.New("error: Initialize must be called before Watch")
+	if nodeInformer == nil {
+		return nil, fmt.Errorf("node informer cannot be nil")
 	}
 
-	defer utilruntime.HandleCrash()
-	defer w.handler.ShutDown()
+	servicesInformer := serviceInformer.Informer()
+	endpointSlicesInformer := endpointSliceInformer.Informer()
+	nodesInformer := nodeInformer.Informer()
 
-	go w.informer.Run(w.settings.Context.Done())
-
-	if !cache.WaitForNamedCacheSync(w.settings.Handler.WorkQueueSettings.Name, w.settings.Context.Done(), w.informer.HasSynced) {
-		return fmt.Errorf(`error occurred waiting for the cache to sync`)
+	w := &Watcher{
+		synchronizer:          synchronizer,
+		settings:              settings,
+		servicesInformer:      servicesInformer,
+		endpointSliceInformer: endpointSlicesInformer,
+		nodesInformer:         nodesInformer,
+		register:              newRegister(),
 	}
 
-	<-w.settings.Context.Done()
-	return nil
-}
-
-// buildEventHandlerForAdd creates a function that is used as an event handler for the informer when Add events are raised.
-func (w *Watcher) buildEventHandlerForAdd() func(interface{}) {
-	logrus.Info("Watcher::buildEventHandlerForAdd")
-	return func(obj interface{}) {
-		nodeIps, err := w.retrieveNodeIps()
-		if err != nil {
-			logrus.Errorf(`error occurred retrieving node ips: %v`, err)
-			return
-		}
-		service := obj.(*v1.Service)
-		var previousService *v1.Service
-		e := core.NewEvent(core.Created, service, previousService, nodeIps)
-		w.handler.AddRateLimitedEvent(&e)
-	}
-}
-
-// buildEventHandlerForDelete creates a function that is used as an event handler for the informer when Delete events are raised.
-func (w *Watcher) buildEventHandlerForDelete() func(interface{}) {
-	logrus.Info("Watcher::buildEventHandlerForDelete")
-	return func(obj interface{}) {
-		nodeIps, err := w.retrieveNodeIps()
-		if err != nil {
-			logrus.Errorf(`error occurred retrieving node ips: %v`, err)
-			return
-		}
-		service := obj.(*v1.Service)
-		var previousService *v1.Service
-		e := core.NewEvent(core.Deleted, service, previousService, nodeIps)
-		w.handler.AddRateLimitedEvent(&e)
-	}
-}
-
-// buildEventHandlerForUpdate creates a function that is used as an event handler for the informer when Update events are raised.
-func (w *Watcher) buildEventHandlerForUpdate() func(interface{}, interface{}) {
-	logrus.Info("Watcher::buildEventHandlerForUpdate")
-	return func(previous, updated interface{}) {
-		nodeIps, err := w.retrieveNodeIps()
-		if err != nil {
-			logrus.Errorf(`error occurred retrieving node ips: %v`, err)
-			return
-		}
-		service := updated.(*v1.Service)
-		previousService := previous.(*v1.Service)
-		e := core.NewEvent(core.Updated, service, previousService, nodeIps)
-		w.handler.AddRateLimitedEvent(&e)
-	}
-}
-
-// buildInformer creates the informer used to watch for changes to Kubernetes resources.
-func (w *Watcher) buildInformer() (cache.SharedIndexInformer, error) {
-	logrus.Debug("Watcher::buildInformer")
-
-	options := informers.WithNamespace(w.settings.Watcher.NginxIngressNamespace)
-	factory := informers.NewSharedInformerFactoryWithOptions(w.settings.K8sClient, w.settings.Watcher.ResyncPeriod, options)
-	informer := factory.Core().V1().Services().Informer()
-
-	return informer, nil
-}
-
-// initializeEventListeners initializes the event listeners for the informer.
-func (w *Watcher) initializeEventListeners() error {
-	logrus.Debug("Watcher::initializeEventListeners")
-	var err error
-
-	handlers := cache.ResourceEventHandlerFuncs{
-		AddFunc:    w.buildEventHandlerForAdd(),
-		DeleteFunc: w.buildEventHandlerForDelete(),
-		UpdateFunc: w.buildEventHandlerForUpdate(),
-	}
-
-	w.eventHandlerRegistration, err = w.informer.AddEventHandler(handlers)
-	if err != nil {
-		return fmt.Errorf(`error occurred adding event handlers: %w`, err)
-	}
-
-	return nil
-}
-
-// notControlPlaneNode retrieves the IP Addresses of the nodes in the cluster. Currently, the master node is excluded. This is
-// because the master node may or may not be a worker node and thus may not be able to route traffic.
-func (w *Watcher) retrieveNodeIps() ([]string, error) {
-	started := time.Now()
-	logrus.Debug("Watcher::retrieveNodeIps")
-
-	var nodeIps []string
-
-	nodes, err := w.settings.K8sClient.CoreV1().Nodes().List(w.settings.Context, metav1.ListOptions{})
-	if err != nil {
-		logrus.Errorf(`error occurred retrieving the list of nodes: %v`, err)
+	if err := w.initializeEventListeners(servicesInformer); err != nil {
 		return nil, err
 	}
 
-	for _, node := range nodes.Items {
-
-		// this is kind of a broad assumption, should probably make this a configurable option
-		if w.notControlPlaneNode(node) {
-			for _, address := range node.Status.Addresses {
-				if address.Type == v1.NodeInternalIP {
-					nodeIps = append(nodeIps, address.Address)
-				}
-			}
-		}
-	}
-
-	logrus.Debugf("Watcher::retrieveNodeIps duration: %d", time.Since(started).Nanoseconds())
-
-	return nodeIps, nil
+	return w, nil
 }
 
-// notControlPlaneNode determines if the node is a master node.
-func (w *Watcher) notControlPlaneNode(node v1.Node) bool {
-	logrus.Debug("Watcher::notControlPlaneNode")
+// Run starts the process of watching for changes to Kubernetes resources.
+// Initialize must be called before Watch.
+func (w *Watcher) Run(ctx context.Context) error {
+	if w.servicesInformer == nil {
+		return fmt.Errorf(`servicesInformer is nil`)
+	}
 
-	_, found := node.Labels["node-role.kubernetes.io/control-plane"]
+	slog.Debug("Watcher::Watch")
 
-	return !found
+	defer utilruntime.HandleCrash()
+	defer w.synchronizer.ShutDown()
+
+	<-ctx.Done()
+	return nil
+}
+
+// isDesiredService returns whether the user has configured the given service for watching.
+func (w *Watcher) isDesiredService(service *v1.Service) bool {
+	annotation, ok := service.Annotations["nginx.com/nginxaas"]
+	if !ok {
+		return false
+	}
+
+	return annotation == w.settings.Watcher.ServiceAnnotation
+}
+
+func (w *Watcher) buildNodesEventHandlerForAdd() func(interface{}) {
+	slog.Info("Watcher::buildNodesEventHandlerForAdd")
+	return func(obj interface{}) {
+		slog.Debug("received node add event")
+		for _, service := range w.register.listServices() {
+			e := core.NewEvent(core.Updated, service)
+			w.synchronizer.AddEvent(e)
+		}
+	}
+}
+
+func (w *Watcher) buildNodesEventHandlerForUpdate() func(interface{}, interface{}) {
+	slog.Info("Watcher::buildNodesEventHandlerForUpdate")
+	return func(previous, updated interface{}) {
+		slog.Debug("received node update event")
+		for _, service := range w.register.listServices() {
+			e := core.NewEvent(core.Updated, service)
+			w.synchronizer.AddEvent(e)
+		}
+	}
+}
+
+func (w *Watcher) buildNodesEventHandlerForDelete() func(interface{}) {
+	slog.Info("Watcher::buildNodesEventHandlerForDelete")
+	return func(obj interface{}) {
+		slog.Debug("received node delete event")
+		for _, service := range w.register.listServices() {
+			e := core.NewEvent(core.Updated, service)
+			w.synchronizer.AddEvent(e)
+		}
+	}
+}
+
+func (w *Watcher) buildEndpointSlicesEventHandlerForAdd() func(interface{}) {
+	slog.Info("Watcher::buildEndpointSlicesEventHandlerForAdd")
+	return func(obj interface{}) {
+		slog.Debug("received endpoint slice add event")
+		endpointSlice, ok := obj.(*discovery.EndpointSlice)
+		if !ok {
+			slog.Error("could not convert event object to EndpointSlice", "obj", obj)
+			return
+		}
+
+		service, ok := w.register.getService(endpointSlice.Namespace, endpointSlice.Labels["kubernetes.io/service-name"])
+		if !ok {
+			// not interested in any unregistered service
+			return
+		}
+
+		e := core.NewEvent(core.Updated, service)
+		w.synchronizer.AddEvent(e)
+	}
+}
+
+func (w *Watcher) buildEndpointSlicesEventHandlerForUpdate() func(interface{}, interface{}) {
+	slog.Info("Watcher::buildEndpointSlicesEventHandlerForUpdate")
+	return func(previous, updated interface{}) {
+		slog.Debug("received endpoint slice update event")
+		endpointSlice, ok := updated.(*discovery.EndpointSlice)
+		if !ok {
+			slog.Error("could not convert event object to EndpointSlice", "obj", updated)
+			return
+		}
+
+		service, ok := w.register.getService(endpointSlice.Namespace, endpointSlice.Labels["kubernetes.io/service-name"])
+		if !ok {
+			// not interested in any unregistered service
+			return
+		}
+
+		e := core.NewEvent(core.Updated, service)
+		w.synchronizer.AddEvent(e)
+	}
+}
+
+func (w *Watcher) buildEndpointSlicesEventHandlerForDelete() func(interface{}) {
+	slog.Info("Watcher::buildEndpointSlicesEventHandlerForDelete")
+	return func(obj interface{}) {
+		slog.Debug("received endpoint slice delete event")
+		endpointSlice, ok := obj.(*discovery.EndpointSlice)
+		if !ok {
+			slog.Error("could not convert event object to EndpointSlice", "obj", obj)
+			return
+		}
+
+		service, ok := w.register.getService(endpointSlice.Namespace, endpointSlice.Labels["kubernetes.io/service-name"])
+		if !ok {
+			// not interested in any unregistered service
+			return
+		}
+
+		e := core.NewEvent(core.Deleted, service)
+		w.synchronizer.AddEvent(e)
+	}
+}
+
+// buildServiceEventHandlerForAdd creates a function that is used as an event handler
+// for the informer when Add events are raised.
+func (w *Watcher) buildServiceEventHandlerForAdd() func(interface{}) {
+	slog.Info("Watcher::buildServiceEventHandlerForAdd")
+	return func(obj interface{}) {
+		service := obj.(*v1.Service)
+		if !w.isDesiredService(service) {
+			return
+		}
+
+		w.register.addOrUpdateService(service)
+
+		e := core.NewEvent(core.Created, service)
+		w.synchronizer.AddEvent(e)
+	}
+}
+
+// buildServiceEventHandlerForDelete creates a function that is used as an event handler
+// for the informer when Delete events are raised.
+func (w *Watcher) buildServiceEventHandlerForDelete() func(interface{}) {
+	slog.Info("Watcher::buildServiceEventHandlerForDelete")
+	return func(obj interface{}) {
+		service := obj.(*v1.Service)
+		if !w.isDesiredService(service) {
+			return
+		}
+
+		w.register.removeService(service)
+
+		e := core.NewEvent(core.Deleted, service)
+		w.synchronizer.AddEvent(e)
+	}
+}
+
+// buildServiceEventHandlerForUpdate creates a function that is used as an event handler
+// for the informer when Update events are raised.
+func (w *Watcher) buildServiceEventHandlerForUpdate() func(interface{}, interface{}) {
+	slog.Info("Watcher::buildServiceEventHandlerForUpdate")
+	return func(previous, updated interface{}) {
+		previousService := previous.(*v1.Service)
+		service := updated.(*v1.Service)
+
+		if w.isDesiredService(previousService) && !w.isDesiredService(service) {
+			slog.Info("Watcher::service annotation removed", "serviceName", service.Name)
+			w.register.removeService(previousService)
+			e := core.NewEvent(core.Deleted, previousService)
+			w.synchronizer.AddEvent(e)
+			return
+		}
+
+		if !w.isDesiredService(service) {
+			return
+		}
+
+		w.register.addOrUpdateService(service)
+
+		e := core.NewEvent(core.Updated, service)
+		w.synchronizer.AddEvent(e)
+	}
+}
+
+// initializeEventListeners initializes the event listeners for the informer.
+func (w *Watcher) initializeEventListeners(
+	servicesInformer cache.SharedIndexInformer,
+) error {
+	slog.Debug("Watcher::initializeEventListeners")
+	var err error
+
+	serviceHandlers := cache.ResourceEventHandlerFuncs{
+		AddFunc:    w.buildServiceEventHandlerForAdd(),
+		DeleteFunc: w.buildServiceEventHandlerForDelete(),
+		UpdateFunc: w.buildServiceEventHandlerForUpdate(),
+	}
+
+	endpointSliceHandlers := cache.ResourceEventHandlerFuncs{
+		AddFunc:    w.buildEndpointSlicesEventHandlerForAdd(),
+		DeleteFunc: w.buildEndpointSlicesEventHandlerForDelete(),
+		UpdateFunc: w.buildEndpointSlicesEventHandlerForUpdate(),
+	}
+
+	nodeHandlers := cache.ResourceEventHandlerFuncs{
+		AddFunc:    w.buildNodesEventHandlerForAdd(),
+		DeleteFunc: w.buildNodesEventHandlerForDelete(),
+		UpdateFunc: w.buildNodesEventHandlerForUpdate(),
+	}
+
+	_, err = servicesInformer.AddEventHandler(serviceHandlers)
+	if err != nil {
+		return fmt.Errorf(`error occurred adding service event handlers: %w`, err)
+	}
+
+	_, err = w.endpointSliceInformer.AddEventHandler(endpointSliceHandlers)
+	if err != nil {
+		return fmt.Errorf(`error occurred adding endpoint slice event handlers: %w`, err)
+	}
+
+	_, err = w.nodesInformer.AddEventHandler(nodeHandlers)
+	if err != nil {
+		return fmt.Errorf(`error occurred adding node event handlers: %w`, err)
+	}
+
+	return nil
 }

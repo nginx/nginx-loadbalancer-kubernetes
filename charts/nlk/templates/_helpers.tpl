@@ -48,6 +48,10 @@ Create chart name and version as used by the chart label.
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+{{- define "nlk.apikeyname" -}}
+{{- printf "%s-nginxaas-api-key" (include "nlk.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
 {{/*
 Common labels
 */}}
@@ -76,11 +80,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Expand the name of the configmap.
 */}}
 {{- define "nlk.configName" -}}
-{{- if .Values.nlk.customConfigMap -}}
-{{ .Values.nlk.customConfigMap }}
-{{- else -}}
-{{- default (include "nlk.fullname" .) .Values.nlk.config.name -}}
-{{- end -}}
+{{- printf "%s-nlk-config" (include "nlk.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end -}}
 
 {{/*
@@ -91,14 +91,20 @@ Expand service account name.
 {{- end -}}
 
 {{- define "nlk.tag" -}}
+{{- if .Values.global.azure -}}
+{{- printf "%s" .Values.global.azure.images.nlk.tag -}}
+{{- else -}}
 {{- default .Chart.AppVersion .Values.nlk.image.tag -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
 Expand image name.
 */}}
 {{- define "nlk.image" -}}
-{{- if .Values.nlk.image.digest -}}
+{{- if .Values.global.azure -}}
+{{- printf "%s/%s:%s" .Values.global.azure.images.nlk.registry .Values.global.azure.images.nlk.image (include "nlk.tag" .) -}}
+{{- else if .Values.nlk.image.digest -}}
 {{- printf "%s/%s@%s" .Values.nlk.image.registry .Values.nlk.image.repository .Values.nlk.image.digest -}}
 {{- else -}}
 {{- printf "%s/%s:%s" .Values.nlk.image.registry .Values.nlk.image.repository (include "nlk.tag" .) -}}

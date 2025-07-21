@@ -1,17 +1,17 @@
 package core
 
 import (
-	v1 "k8s.io/api/core/v1"
 	"testing"
+
+	v1 "k8s.io/api/core/v1"
 )
 
 func TestNewEvent(t *testing.T) {
+	t.Parallel()
 	expectedType := Created
 	expectedService := &v1.Service{}
-	expectedPreviousService := &v1.Service{}
-	expectedNodeIps := []string{"127.0.0.1"}
 
-	event := NewEvent(expectedType, expectedService, expectedPreviousService, expectedNodeIps)
+	event := NewEvent(expectedType, expectedService)
 
 	if event.Type != expectedType {
 		t.Errorf("expected Created, got %v", event.Type)
@@ -19,13 +19,5 @@ func TestNewEvent(t *testing.T) {
 
 	if event.Service != expectedService {
 		t.Errorf("expected service, got %#v", event.Service)
-	}
-
-	if event.PreviousService != expectedPreviousService {
-		t.Errorf("expected previous service, got %#v", event.PreviousService)
-	}
-
-	if event.NodeIps[0] != expectedNodeIps[0] {
-		t.Errorf("expected node ips, got %#v", event.NodeIps)
 	}
 }

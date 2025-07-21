@@ -7,8 +7,10 @@ package probation
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
+	"log/slog"
+	"net"
 	"net/http"
+	"time"
 )
 
 const (
@@ -25,7 +27,6 @@ const (
 
 // HealthServer is a server that spins up endpoints for the various k8s health checks.
 type HealthServer struct {
-
 	// The underlying HTTP server.
 	httpServer *http.Server
 
@@ -50,7 +51,7 @@ func NewHealthServer() *HealthServer {
 
 // Start spins up the health server.
 func (hs *HealthServer) Start() {
-	logrus.Debugf("Starting probe listener on port %d", ListenPort)
+	slog.Debug("Starting probe listener", "port", ListenPort)
 
 	address := fmt.Sprintf(":%d", ListenPort)
 
@@ -58,21 +59,28 @@ func (hs *HealthServer) Start() {
 	mux.HandleFunc("/livez", hs.HandleLive)
 	mux.HandleFunc("/readyz", hs.HandleReady)
 	mux.HandleFunc("/startupz", hs.HandleStartup)
-	hs.httpServer = &http.Server{Addr: address, Handler: mux}
+
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		slog.Error("failed to listen", "error", err)
+		return
+	}
+
+	hs.httpServer = &http.Server{Handler: mux, ReadTimeout: 2 * time.Second}
 
 	go func() {
-		if err := hs.httpServer.ListenAndServe(); err != nil {
-			logrus.Errorf("unable to start probe listener on %s: %v", hs.httpServer.Addr, err)
+		if err := hs.httpServer.Serve(listener); err != nil {
+			slog.Error("unable to start probe listener", "address", hs.httpServer.Addr, "error", err)
 		}
 	}()
 
-	logrus.Info("Started probe listener on", hs.httpServer.Addr)
+	slog.Info("Started probe listener", "address", hs.httpServer.Addr)
 }
 
 // Stop shuts down the health server.
 func (hs *HealthServer) Stop() {
 	if err := hs.httpServer.Close(); err != nil {
-		logrus.Errorf("unable to stop probe listener on %s: %v", hs.httpServer.Addr, err)
+		slog.Error("unable to stop probe listener", "address", hs.httpServer.Addr, "error", err)
 	}
 }
 
@@ -97,14 +105,14 @@ func (hs *HealthServer) handleProbe(writer http.ResponseWriter, _ *http.Request,
 		writer.WriteHeader(http.StatusOK)
 
 		if _, err := fmt.Fprint(writer, Ok); err != nil {
-			logrus.Error(err)
+			slog.Error(err.Error())
 		}
 
 	} else {
 		writer.WriteHeader(http.StatusServiceUnavailable)
 
 		if _, err := fmt.Fprint(writer, ServiceNotAvailable); err != nil {
-			logrus.Error(err)
+			slog.Error(err.Error())
 		}
 	}
 }

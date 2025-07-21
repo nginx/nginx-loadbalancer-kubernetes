@@ -6,14 +6,16 @@
 package application
 
 import (
+	"context"
+	"log/slog"
+
 	"github.com/nginxinc/kubernetes-nginx-ingress/internal/core"
-	"github.com/sirupsen/logrus"
 )
 
 // NullBorderClient is a BorderClient that does nothing.
-// / It serves only to prevent a panic if the BorderClient is not set correctly and errors from the factory methods are ignored.
-type NullBorderClient struct {
-}
+// It serves only to prevent a panic if the BorderClient
+// is not set correctly and errors from the factory methods are ignored.
+type NullBorderClient struct{}
 
 // NewNullBorderClient is the Factory function for creating a NullBorderClient
 func NewNullBorderClient() (Interface, error) {
@@ -21,13 +23,13 @@ func NewNullBorderClient() (Interface, error) {
 }
 
 // Update logs a Warning. It is, after all, a NullObject Pattern implementation.
-func (nbc *NullBorderClient) Update(_ *core.ServerUpdateEvent) error {
-	logrus.Warn("NullBorderClient.Update called")
+func (nbc *NullBorderClient) Update(_ context.Context, _ *core.ServerUpdateEvent) error {
+	slog.Warn("NullBorderClient.Update called")
 	return nil
 }
 
 // Delete logs a Warning. It is, after all, a NullObject Pattern implementation.
-func (nbc *NullBorderClient) Delete(_ *core.ServerUpdateEvent) error {
-	logrus.Warn("NullBorderClient.Delete called")
+func (nbc *NullBorderClient) Delete(_ context.Context, _ *core.ServerUpdateEvent) error {
+	slog.Warn("NullBorderClient.Delete called")
 	return nil
 }

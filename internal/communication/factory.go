@@ -6,21 +6,19 @@
 package communication
 
 import (
-	"crypto/tls"
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/authentication"
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/configuration"
-	"github.com/sirupsen/logrus"
+	"fmt"
 	netHttp "net/http"
 	"time"
+
+	"github.com/nginxinc/kubernetes-nginx-ingress/pkg/buildinfo"
 )
 
-// NewHttpClient is a factory method to create a new Http Client with a default configuration.
-// RoundTripper is a wrapper around the default net/communication Transport to add additional headers, in this case,
-// the Headers are configured for JSON.
-func NewHttpClient(settings *configuration.Settings) (*netHttp.Client, error) {
-	headers := NewHeaders()
-	tlsConfig := NewTlsConfig(settings)
-	transport := NewTransport(tlsConfig)
+// NewHTTPClient is a factory method to create a new Http Client configured for
+// working with NGINXaaS or the N+ api. If skipVerify is set to true, the http
+// transport will skip TLS certificate verification.
+func NewHTTPClient(apiKey string, skipVerify bool) (*netHttp.Client, error) {
+	headers := NewHeaders(apiKey)
+	transport := NewTransport(skipVerify)
 	roundTripper := NewRoundTripper(headers, transport)
 
 	return &netHttp.Client{
@@ -32,29 +30,24 @@ func NewHttpClient(settings *configuration.Settings) (*netHttp.Client, error) {
 }
 
 // NewHeaders is a factory method to create a new basic Http Headers slice.
-func NewHeaders() []string {
-	return []string{
+func NewHeaders(apiKey string) []string {
+	headers := []string{
 		"Content-Type: application/json",
 		"Accept: application/json",
-	}
-}
-
-// NewTlsConfig is a factory method to create a new basic Tls Config.
-// More attention should be given to the use of `InsecureSkipVerify: true`, as it is not recommended for production use.
-func NewTlsConfig(settings *configuration.Settings) *tls.Config {
-	tlsConfig, err := authentication.NewTlsConfig(settings)
-	if err != nil {
-		logrus.Warnf("Failed to create TLS config: %v", err)
-		return &tls.Config{InsecureSkipVerify: true}
+		fmt.Sprintf("X-NLK-Version: %s", buildinfo.SemVer()),
 	}
 
-	return tlsConfig
+	if apiKey != "" {
+		headers = append(headers, fmt.Sprintf("Authorization: ApiKey %s", apiKey))
+	}
+
+	return headers
 }
 
 // NewTransport is a factory method to create a new basic Http Transport.
-func NewTransport(config *tls.Config) *netHttp.Transport {
-	transport := netHttp.DefaultTransport.(*netHttp.Transport)
-	transport.TLSClientConfig = config
+func NewTransport(skipVerify bool) *netHttp.Transport {
+	transport := netHttp.DefaultTransport.(*netHttp.Transport).Clone()
+	transport.TLSClientConfig.InsecureSkipVerify = skipVerify
 
 	return transport
 }
