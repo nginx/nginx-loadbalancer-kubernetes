@@ -13,11 +13,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/nginx/kubernetes-nginx-ingress/internal/application"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/communication"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/configuration"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/core"
 	nginxClient "github.com/nginx/nginx-plus-go-client/v2/client"
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/application"
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/communication"
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/configuration"
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/core"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	corelisters "k8s.io/client-go/listers/core/v1"
@@ -127,8 +127,6 @@ func (s *Synchronizer) ShutDown() {
 }
 
 // buildBorderClient creates a Border Client for the specified event.
-// NOTE: There is an open issue (https://github.com/nginxinc/nginx-loadbalancer-kubernetes/issues/36) to move creation
-// of the underlying Border Server client to the NewBorderClient function.
 func (s *Synchronizer) buildBorderClient(event *core.ServerUpdateEvent) (application.Interface, error) {
 	slog.Debug(`Synchronizer::buildBorderClient`)
 

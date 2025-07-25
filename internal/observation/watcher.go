@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/configuration"
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/core"
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/synchronization"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/configuration"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/core"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/synchronization"
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"

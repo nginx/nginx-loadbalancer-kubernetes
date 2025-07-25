@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/configuration"
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/core"
-	"github.com/nginxinc/kubernetes-nginx-ingress/test/mocks"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/configuration"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/core"
+	"github.com/nginx/kubernetes-nginx-ingress/test/mocks"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"

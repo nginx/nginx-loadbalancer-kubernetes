@@ -5,7 +5,7 @@
 
 package mocks
 
-import "github.com/nginxinc/kubernetes-nginx-ingress/internal/core"
+import "github.com/nginx/kubernetes-nginx-ingress/internal/core"
 
 type MockSynchronizer struct {
 	Events []core.ServerUpdateEvent
@@ -30,5 +30,4 @@ func (s *MockSynchronizer) Run(stopCh <-chan struct{}) {
 }
 
 func (s *MockSynchronizer) ShutDown() {
-
 }

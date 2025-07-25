@@ -8,7 +8,7 @@ package application
 import (
 	"testing"
 
-	"github.com/nginxinc/kubernetes-nginx-ingress/test/mocks"
+	"github.com/nginx/kubernetes-nginx-ingress/test/mocks"
 )
 
 func TestBorderClient_CreatesHttpBorderClient(t *testing.T) {
