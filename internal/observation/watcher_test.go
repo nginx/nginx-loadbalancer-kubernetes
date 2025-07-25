@@ -8,7 +8,7 @@ package observation
 import (
 	"testing"
 
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/configuration"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/configuration"
 	"github.com/stretchr/testify/require"
 )
 

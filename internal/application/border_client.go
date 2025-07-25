@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/core"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/core"
 )
 
 // Interface defines the functions required to implement a Border Client.

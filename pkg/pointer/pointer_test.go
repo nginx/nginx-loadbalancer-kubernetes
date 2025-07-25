@@ -8,7 +8,7 @@ package pointer_test
 import (
 	"testing"
 
-	"github.com/nginxinc/kubernetes-nginx-ingress/pkg/pointer"
+	"github.com/nginx/kubernetes-nginx-ingress/pkg/pointer"
 	"github.com/stretchr/testify/require"
 )
 

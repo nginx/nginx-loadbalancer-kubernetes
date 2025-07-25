@@ -66,7 +66,7 @@ Please see the /docs folder and Installation Guides for detailed documentation.
 
 ## Development
 
-Read the [`CONTRIBUTING.md`](https://github.com/nginxinc/nginx-loadbalancer-kubernetes/blob/main/CONTRIBUTING.md) file.
+Read the [`CONTRIBUTING.md`](https://github.com/nginx/nginx-loadbalancer-kubernetes/blob/main/CONTRIBUTING.md) file.
 
 ## Authors
 
@@ -75,6 +75,6 @@ Read the [`CONTRIBUTING.md`](https://github.com/nginxinc/nginx-loadbalancer-kube
 
 ## License
 
-[Apache License, Version 2.0](https://github.com/nginxinc/nginx-loadbalancer-kubernetes/blob/main/LICENSE)
+[Apache License, Version 2.0](https://github.com/nginx/nginx-loadbalancer-kubernetes/blob/main/LICENSE)
 
 &copy; [F5 Networks, Inc.](https://www.f5.com/) 2023

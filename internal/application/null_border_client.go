@@ -9,7 +9,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/core"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/core"
 )
 
 // NullBorderClient is a BorderClient that does nothing.

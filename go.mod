@@ -2,7 +2,7 @@
 // Use of this source code is governed by the Apache
 // license that can be found in the LICENSE file.
 
-module github.com/nginxinc/kubernetes-nginx-ingress
+module github.com/nginx/kubernetes-nginx-ingress
 
 go 1.24.4
 
@@ -73,7 +73,7 @@ require (
 )
 
 replace (
-	github.com/nginxinc/kubernetes-nginx-ingress/internal/config => ./internal/config
-	github.com/nginxinc/kubernetes-nginx-ingress/internal/translation => ./internal/translation
-	github.com/nginxinc/kubernetes-nginx-ingress/internal/translation/nginxplus => ./internal/translation/nginxplus
+	github.com/nginx/kubernetes-nginx-ingress/internal/config => ./internal/config
+	github.com/nginx/kubernetes-nginx-ingress/internal/translation => ./internal/translation
+	github.com/nginx/kubernetes-nginx-ingress/internal/translation/nginxplus => ./internal/translation/nginxplus
 )

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/core"
-	"github.com/nginxinc/kubernetes-nginx-ingress/pkg/pointer"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/core"
+	"github.com/nginx/kubernetes-nginx-ingress/pkg/pointer"
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -8,8 +8,8 @@ package application
 import (
 	"errors"
 
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/core"
-	"github.com/nginxinc/kubernetes-nginx-ingress/test/mocks"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/core"
+	"github.com/nginx/kubernetes-nginx-ingress/test/mocks"
 )
 
 const (

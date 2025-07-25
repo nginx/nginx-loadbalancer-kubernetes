@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nginxinc/kubernetes-nginx-ingress/internal/core"
+	"github.com/nginx/kubernetes-nginx-ingress/internal/core"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	corelisters "k8s.io/client-go/listers/core/v1"

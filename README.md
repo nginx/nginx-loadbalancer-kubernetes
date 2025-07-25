@@ -1,12 +1,12 @@
 <!-- markdownlint-disable-next-line first-line-h1 -->
-[![CI](https://github.com/nginxinc/nginx-loadbalancer-kubernetes/actions/workflows/build-test.yml/badge.svg)](https://github.com/nginxinc/nginx-loadbalancer-kubernetess/actions/workflows/build-test.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nginxinc/nginx-loadbalancer-kubernetes)](https://goreportcard.com/report/github.com/nginxinc/nginx-loadbalancer-kubernetes)
+[![CI](https://github.com/nginx/nginx-loadbalancer-kubernetes/actions/workflows/build-test.yml/badge.svg)](https://github.com/nginx/nginx-loadbalancer-kubernetess/actions/workflows/build-test.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nginx/nginx-loadbalancer-kubernetes)](https://goreportcard.com/report/github.com/nginx/nginx-loadbalancer-kubernetes)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/nginxinc/nginx-loadbalancer-kubernetes?logo=github&sort=semver)](https://github.com/nginxinc/nginx-loadbalancer-kubernetes/releases/latest) ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/nginxinc/nginx-loadbalancer-kubernetes?logo=go)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nginxinc/nginx-loadbalancer-kubernetes/badge)](https://api.securityscorecards.dev/projects/github.com/nginxinc/nginx-loadbalancer-kubernetes)
-[![CodeQL](https://github.com/nginxinc/nginx-loadbalancer-kubernetes/workflows/codeql.yml/badge.svg?branch=main&event=push)](https://github.com/nginxinc/nginx-loadbalancer-kubernetes/actions/codeql.yml)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fnginxinc%2Fnginx-loadbalancer-kubernetes.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fnginxinc%2Fnginx-loadbalancer-kubernetes?ref=badge_shield)
-[![Community Support](https://badgen.net/badge/support/community/cyan?icon=awesome)](https://github.com/nginxinc/nginx-loadbalancer-kubernetes/discussions)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/nginx/nginx-loadbalancer-kubernetes?logo=github&sort=semver)](https://github.com/nginx/nginx-loadbalancer-kubernetes/releases/latest) ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/nginx/nginx-loadbalancer-kubernetes?logo=go)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nginx/nginx-loadbalancer-kubernetes/badge)](https://api.securityscorecards.dev/projects/github.com/nginx/nginx-loadbalancer-kubernetes)
+[![CodeQL](https://github.com/nginx/nginx-loadbalancer-kubernetes/workflows/codeql.yml/badge.svg?branch=main&event=push)](https://github.com/nginx/nginx-loadbalancer-kubernetes/actions/codeql.yml)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fnginx%2Fnginx-loadbalancer-kubernetes.svg?type=shield)](/git%2Bgithub.com%2Fnginx%2Fnginx-loadbalancer-kubernetes?ref=badge_shield)
+[![Community Support](https://badgen.net/badge/support/community/cyan?icon=awesome)](https://github.com/nginx/nginx-loadbalancer-kubernetes/discussions)
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 
 <div style="margin-bottom: 5em;">
@@ -105,7 +105,7 @@ There is a much more detailed [Installation Reference](docs/README.md) available
 
 1. Clone this repo (optional, you can simply copy the `deployments/` directory)
 
-    ```git clone git@github.com:nginxinc/nginx-loadbalancer-kubernetes.git```
+    ```git clone git@github.com:nginx/nginx-loadbalancer-kubernetes.git```
 
 1. Apply the Namespace
 
@@ -168,7 +168,7 @@ when we are able to accept pull requests from the community.
 
 ## License
 
-[Apache License, Version 2.0](https://github.com/nginxinc/nginx-loadbalancer-kubernetes/blob/main/LICENSE)
+[Apache License, Version 2.0](https://github.com/nginx/nginx-loadbalancer-kubernetes/blob/main/LICENSE)
 
 &copy; [F5, Inc.](https://www.f5.com/) 2023
 

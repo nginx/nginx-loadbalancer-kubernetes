@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/nginxinc/kubernetes-nginx-ingress/test/mocks"
+	"github.com/nginx/kubernetes-nginx-ingress/test/mocks"
 )
 
 func TestHealthServer_HandleLive(t *testing.T) {

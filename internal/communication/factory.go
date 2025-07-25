@@ -10,7 +10,7 @@ import (
 	netHttp "net/http"
 	"time"
 
-	"github.com/nginxinc/kubernetes-nginx-ingress/pkg/buildinfo"
+	"github.com/nginx/kubernetes-nginx-ingress/pkg/buildinfo"
 )
 
 // NewHTTPClient is a factory method to create a new Http Client configured for
