@@ -113,13 +113,6 @@
                 "description": "Enable private network access to the Kubernetes cluster."
             }
         },
-        "enableHttpApplicationRouting": {
-            "defaultValue": true,
-            "type": "Bool",
-            "metadata": {
-                "description": "Boolean flag to turn on and off http application routing."
-            }
-        },
         "enableAzurePolicy": {
             "defaultValue": false,
             "type": "Bool",
@@ -209,9 +202,6 @@
                     "enablePrivateCluster": "[parameters('enablePrivateCluster')]"
                 },
                 "addonProfiles": {
-                    "httpApplicationRouting": {
-                        "enabled": "[parameters('enableHttpApplicationRouting')]"
-                    },
                     "azurepolicy": {
                         "enabled": "[parameters('enableAzurePolicy')]"
                     },
