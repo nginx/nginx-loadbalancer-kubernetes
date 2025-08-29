@@ -9,157 +9,38 @@
 [![Community Support](https://badgen.net/badge/support/community/cyan?icon=awesome)](https://github.com/nginx/nginx-loadbalancer-kubernetes/discussions)
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 
-<div style="margin-bottom: 5em;">
-    <span>
-        <img style="float: left;" src="nlk-logo.svg" width="124" />
-        <h2 style="padding: 1.5em">nginx-loadbalancer-kubernetes</h2>
-    </span>
-</div>
+# nginx-loadbalancer-kubernetes
 
-The NGINX Loadbalancer for Kubernetes, or _NLK_, is a Kubernetes controller that provides TCP load balancing external to a Kubernetes cluster running on-premise.
+## Welcome to the NGINX LoadBalancer for Kubernetes Solution
 
-## Requirements
+![Nginx K8s LB](docs/media/nlk-logo.png) | ![Nginx K8s LB](docs/media/nginx-2020.png)
+--- | ---
 
-[//]: # (### Who needs NLK?)
+This repo contains source code and documents for a `Kubernetes Controller from NGINX`, that provides TCP and HTTP load balancing external to a Kubernetes cluster. The primary supported use case is for NGINXaaS for Azure's [Load Balancer for Kubernetes](https://docs.nginx.com/nginxaas/azure/loadbalancer-kubernetes/), where users integrate an Azure Kubernetes Service service with an NGINXaaS deployment. It should also be possible to use this controller to integrate an on-prem Kubernetes cluster with one or many NGINX plus instances.
 
-[//]: # ()
-[//]: # (- [ ] If you find yourself living in a world where Kubernetes is running on-premise instead of a cloud provider, you might need NLK.)
+## Overview
 
-[//]: # (- [ ] If you want exceptional, best-in-class load-balancing for your Kubernetes clusters by using NGINX Plus, you might need NLK.)
+- `NLK - NGINX Loadbalancer for Kubernetes` is a Kubernetes controller from NGINX that monitors specified Kubernetes services, and then sends API calls to an external NGINX Plus server to manage NGINX Upstream servers dynamically.
+- This will `synchronize` the Kubernetes service's endpoints with the NGINX server's upstream list.
+- One use case is to track the`NodePort` IP:Port definitions for the NGINX Ingress Controller's `nginx-ingress Service`.
+- NLK is a native Kubernetes controller, running, configured and managed with standard Kubernetes commands.
+- When NLK is paired with the NGINX Plus Server located external to the Kubernetes cluster, this controller will provide a `TCP Load Balancer Service` to the Kubernetes clusters.
+- NLK paired with the NGINX Plus Server located external to the Cluster, using NGINX's advanced HTTP features, provides an `HTTP Load Balancer Service` for enterprise traffic management solutions, such as:
+  - MultiCluster Active/Active Load Balancing
+  - Horizontal Cluster Scaling
+  - HTTP Split Clients - for A/B, Blue/Green, and Canary test and production traffic steering.  Allows Cluster operations/maintainence like upgrades, patching, expansion and troubleshooting with no downtime or reloads
+  - Advanced TLS Processing - MutualTLS, OCSP, FIPS, dynamic cert loading
+  - Advanced Security features - Oauth, JWT, App Protect WAF Firewall, Rate and Bandwidth limits
+  - NGINX Java Script (NJS) for custom solutions
+  - NGINX Zone Sync of KeyVal data
 
-[//]: # (- [ ] If you want the ability to manage your load-balancing configuration with the same tools you use to manage your Kubernetes cluster, you might need NLK.)
+## NLK Controller Software Design Overview - How it works
 
-### What you will need
+[NLK Controller DESIGN and Architecture](docs/DESIGN.md)
 
-- [ ] A On-Premise Kubernetes cluster running version 1.24 or higher.
-- [ ] One or more NGINX Plus hosts running outside your Kubernetes cluster (NGINX Plus hosts must have the ability to route traffic to the cluster).
+## Development
 
-There is a more detailed [Installation Reference](docs/README.md) available in the `docs/` directory.
-
-### Why NLK?
-
-NLK provides a simple, easy-to-manage way to automate load balancing for your Kubernetes applications by leveraging NGINX Plus hosts running outside your cluster.
-
-NLK installs easily, has a small footprint, and is easy to configure and manage.
-
-NLK does not require learning a custom object model, you only have to understand NGINX configuration to get the most out of this solution.
-There is thorough documentation available with the specifics in the `docs/` directory.
-
-### What does NLK do?
-
-tl;dr:
-
-_**NLK is a Kubernetes controller that monitors Services and Nodes in your cluster, and then sends API calls to an external NGINX Plus server to manage NGINX Plus Upstream servers automatically.**_
-
-That's all well and good, but what does it mean? Kubernetes clusters require some tooling to handling routing traffic from the outside world (e.g.: the Internet, corporate network, etc.) to the cluster.
-This is typically done with a load balancer. The load balancer is responsible for routing traffic to the appropriate worker node which then forwards the traffic to the appropriate Service / Pod.
-
-If you are using a hosted Kubernetes solution -- Digital Ocean, AWS, Azure, etc. -- you can use the cloud provider's load balancer service. Those services will create a load balancer for you.
-You can use the cloud provider's API to manage the load balancer, or you can use the cloud provider's web console.
-
-If you are running Kubernetes on-premise and will need to manage your own load balancer, NLK can help.
-
-NLK itself does not perform load balancing. Rather, NLK allows you to manage Service resources within your cluster to update your load balancers, with tooling you are most likely already using.
-
-<img src="docs/media/nlk-blog-diagram-v1.png" width="768" />
-
-## Getting Started
-
-There are few bits of administrivia to get out of the way before you can start leveraging NLK for your load balancing needs.
-
-As noted above, NLK is intended for when you have one or more Kubernetes clusters running on-premise. In addition to this,
-you need to have at least one NGINX Plus host running outside your cluster (Please refer to the [Roadmap](#roadmap) for information about other load balancer servers).
-
-### Deployment
-
-#### RBAC
-
-As with everything Kubernetes, NLK requires RBAC permissions to function properly. The necessary resources are defined in the various YAML files in `deployment/rbac/`.
-
-For convenience, two scripts are included, `apply.sh`, and `unapply.sh`. These scripts will apply or remove the RBAC resources, respectively.
-
-The permissions required by NLK are modest. NLK requires the ability to read Resources via shared informers; the resources are Services, Nodes, and ConfigMaps.
-The Services and ConfigMap are restricted to a specific namespace (default: "nlk"). The Nodes resource is cluster-wide.
-
-#### Configuration
-
-NLK is configured via a ConfigMap, the default settings are found in `deployment/configmap.yaml`. Presently there is a single configuration value exposed in the ConfigMap, `nginx-hosts`.
-This contains a comma-separated list of NGINX Plus hosts that NLK will maintain.
-
-You will need to update this ConfigMap to reflect the NGINX Plus hosts you wish to manage.
-
-If you were to deploy the ConfigMap and start NLK without updating the `nginx-hosts` value, don't fear; the ConfigMap resource is monitored for changes and NLK will update the NGINX Plus hosts accordingly when the resource is changed, no restart required.
-
-There is an extensive [Installation Reference](docs/README.md) available in the `docs/` directory.
-Please refer to that for detailed instructions on how to deploy NLK and run a demo application.
-
-#### Versioning
-
-Versioning is a work in progress. The CI/CD pipeline is being developed and will be used to build and publish NLK images to the Container Registry.
-Once in place, semantic versioning will be used for published images.
-
-#### Deployment Steps
-
-To get NLK up and running in ten steps or fewer, follow these instructions (NOTE, all the aforementioned prerequisites must be met for this to work).
-There is a much more detailed [Installation Reference](docs/README.md) available in the `docs/` directory.
-
-1. Clone this repo (optional, you can simply copy the `deployments/` directory)
-
-    ```git clone git@github.com:nginx/nginx-loadbalancer-kubernetes.git```
-
-1. Apply the Namespace
-
-    ```kubectl apply -f deployments/deployment/namespace.yaml```
-
-1. Apply the RBAC resources
-
-    ```./deployments/rbac/apply.sh```
-
-1. Update / Apply the ConfigMap (For best results update the `nginx-hosts` values first)
-
-    ```kubectl apply -f deployments/deployment/configmap.yaml```
-
-1. Apply the Deployment
-
-    ```kubectl apply -f deployments/deployment/deployment.yaml```
-
-1. Check the logs
-
-    ```kubectl -n nlk logs -f $(kubectl -n nlk get po -l "app=nlk" --no-headers -o custom-columns=":metadata.name")```
-
-At this point NLK should be up and running. Now would be a great time to go over to the [Installation Reference](docs/README.md)
-and follow the instructions to deploy a demo application.
-
-### Monitoring
-
-Presently NLK includes a fair amount of logging. This is intended to be used for debugging purposes.
-There are plans to add more robust monitoring and alerting in the future.
-
-As a rule, we support the use of [OpenTelemetry](https://opentelemetry.io/) for observability, and we will be adding support in the near future.
-
-## Contributing
-
-Presently we are not accepting pull requests. However, we welcome your feedback and suggestions.
-Please open an issue to let us know what you think!
-
-One way to contribute is to help us test NLK. We are looking for people to test NLK in a variety of environments.
-
-If you are curious about the implementation, you should certainly browse the code, but first you might wish to refer to the [design document](docs/DESIGN.md).
-Some of the design decisions are explained there.
-
-## Roadmap
-
-While NLK was initially written specifically for NGINX Plus, we recognize there are other load-balancers that can be supported.
-
-To this end, NLK has been architected to be extensible to support other "Border Servers".
-Border Servers are the term NLK uses to describe load-balancers, reverse proxies, etc. that run outside the cluster and handle
-routing outside traffic to your cluster.
-
-While we have identified a few potential targets, we are open to suggestions. Please open an issue to share your thoughts on potential implementations.
-
-We look forward to building a community around NLK and value all feedback and suggestions. Varying perspectives and embracing
-diverse ideas will be key to NLK becoming a solution that is useful to the community. We will consider it a success
-when we are able to accept pull requests from the community.
+Read the [`CONTRIBUTING.md`](https://github.com/nginx/nginx-loadbalancer-kubernetes/blob/main/CONTRIBUTING.md) file.
 
 ## Authors
 
@@ -170,6 +51,4 @@ when we are able to accept pull requests from the community.
 
 [Apache License, Version 2.0](https://github.com/nginx/nginx-loadbalancer-kubernetes/blob/main/LICENSE)
 
-&copy; [F5, Inc.](https://www.f5.com/) 2023
-
-(but don't let that scare you, we're really nice people...)
+&copy; [F5 Networks, Inc.](https://www.f5.com/) 2023
