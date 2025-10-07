@@ -89,7 +89,7 @@
             }
         },
         "networkPlugin": {
-            "defaultValue": "kubenet",
+            "defaultValue": "azure",
             "allowedValues": [
                 "azure",
                 "kubenet"
