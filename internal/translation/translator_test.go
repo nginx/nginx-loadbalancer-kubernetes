@@ -110,7 +110,6 @@ func TestCreatedTranslateNoInterestingPorts(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestCreatedTranslateOneInterestingPort(t *testing.T) {
 	t.Parallel()
 	testcases := map[string]struct {
@@ -165,7 +164,6 @@ func TestCreatedTranslateOneInterestingPort(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestCreatedTranslateManyInterestingPorts(t *testing.T) {
 	t.Parallel()
 	testcases := map[string]struct {
@@ -220,7 +218,6 @@ func TestCreatedTranslateManyInterestingPorts(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestCreatedTranslateManyMixedPorts(t *testing.T) {
 	t.Parallel()
 
@@ -492,7 +489,6 @@ func TestUpdatedTranslateOneInterestingPort(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestUpdatedTranslateManyInterestingPorts(t *testing.T) {
 	t.Parallel()
 
@@ -547,7 +543,6 @@ func TestUpdatedTranslateManyInterestingPorts(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestUpdatedTranslateManyMixedPorts(t *testing.T) {
 	t.Parallel()
 
@@ -603,7 +598,6 @@ func TestUpdatedTranslateManyMixedPorts(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestUpdatedTranslateManyMixedPortsAndManyNodes(t *testing.T) {
 	t.Parallel()
 
@@ -756,7 +750,6 @@ func TestDeletedTranslateNoInterestingPortsAndNoNodes(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestDeletedTranslateOneInterestingPortAndNoNodes(t *testing.T) {
 	t.Parallel()
 
@@ -806,7 +799,6 @@ func TestDeletedTranslateOneInterestingPortAndNoNodes(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestDeletedTranslateManyInterestingPortsAndNoNodes(t *testing.T) {
 	t.Parallel()
 
@@ -905,7 +897,6 @@ func TestDeletedTranslateManyMixedPortsAndNoNodes(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestDeletedTranslateNoPortsAndOneNode(t *testing.T) {
 	t.Parallel()
 
@@ -1005,7 +996,6 @@ func TestDeletedTranslateNoInterestingPortsAndOneNode(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestDeletedTranslateOneInterestingPortAndOneNode(t *testing.T) {
 	t.Parallel()
 
@@ -1057,7 +1047,6 @@ func TestDeletedTranslateOneInterestingPortAndOneNode(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestDeletedTranslateManyInterestingPortsAndOneNode(t *testing.T) {
 	t.Parallel()
 
@@ -1160,7 +1149,6 @@ func TestDeletedTranslateManyMixedPortsAndOneNode(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestDeletedTranslateNoPortsAndManyNodes(t *testing.T) {
 	t.Parallel()
 
@@ -1260,7 +1248,6 @@ func TestDeletedTranslateNoInterestingPortsAndManyNodes(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestDeletedTranslateOneInterestingPortAndManyNodes(t *testing.T) {
 	t.Parallel()
 
@@ -1311,7 +1298,6 @@ func TestDeletedTranslateOneInterestingPortAndManyNodes(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestDeletedTranslateManyInterestingPortsAndManyNodes(t *testing.T) {
 	t.Parallel()
 

@@ -99,6 +99,7 @@ func (t *Translator) buildLoadBalancerEvents(event *core.Event) (events core.Ser
 	return events, nil
 }
 
+//nolint:gocognit
 func (t *Translator) buildClusterIPEvents(event *core.Event) (events core.ServerUpdateEvents, err error) {
 	namespace := event.Service.GetObjectMeta().GetNamespace()
 	serviceName := event.Service.Name

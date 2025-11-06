@@ -211,6 +211,7 @@ func (w *Watcher) buildEndpointSlicesEventHandlerForDelete() func(interface{}) {
 func (w *Watcher) buildServiceEventHandlerForAdd() func(interface{}) {
 	slog.Info("Watcher::buildServiceEventHandlerForAdd")
 	return func(obj interface{}) {
+		//nolint:forcetypeassert
 		service := obj.(*v1.Service)
 		if !w.isDesiredService(service) {
 			return
@@ -228,6 +229,7 @@ func (w *Watcher) buildServiceEventHandlerForAdd() func(interface{}) {
 func (w *Watcher) buildServiceEventHandlerForDelete() func(interface{}) {
 	slog.Info("Watcher::buildServiceEventHandlerForDelete")
 	return func(obj interface{}) {
+		//nolint:forcetypeassert
 		service := obj.(*v1.Service)
 		if !w.isDesiredService(service) {
 			return
@@ -245,7 +247,9 @@ func (w *Watcher) buildServiceEventHandlerForDelete() func(interface{}) {
 func (w *Watcher) buildServiceEventHandlerForUpdate() func(interface{}, interface{}) {
 	slog.Info("Watcher::buildServiceEventHandlerForUpdate")
 	return func(previous, updated interface{}) {
+		//nolint:forcetypeassert
 		previousService := previous.(*v1.Service)
+		//nolint:forcetypeassert
 		service := updated.(*v1.Service)
 
 		if w.isDesiredService(previousService) && !w.isDesiredService(service) {

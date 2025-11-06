@@ -20,6 +20,7 @@ const (
 )
 
 func buildTerrorizingBorderClient(clientType string) (Interface, error) {
+	//nolint:dupword // dupword doesn't understand jokes
 	nginxClient := mocks.NewErroringMockClient(errors.New(`something went horribly horribly wrong`))
 	bc, err := NewBorderClient(clientType, nginxClient)
 
