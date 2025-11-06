@@ -24,7 +24,6 @@ func ToSlice[T any](values []T) []*T {
 	}
 	ret := make([]*T, 0, len(values))
 	for _, v := range values {
-		v := v
 		ret = append(ret, &v)
 	}
 	return ret

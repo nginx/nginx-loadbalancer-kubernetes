@@ -2,8 +2,6 @@
  * Copyright 2023 F5 Inc. All rights reserved.
  * Use of this source code is governed by the Apache License that can be found in the LICENSE file.
  */
-// dupl complains about duplicates with nginx_http_border_client_test.go
-//nolint:dupl
 package application
 
 import (

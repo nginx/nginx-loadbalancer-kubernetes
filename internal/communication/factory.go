@@ -46,6 +46,7 @@ func NewHeaders(apiKey string) []string {
 
 // NewTransport is a factory method to create a new basic Http Transport.
 func NewTransport(skipVerify bool) *netHttp.Transport {
+	//nolint:forcetypeassert
 	transport := netHttp.DefaultTransport.(*netHttp.Transport).Clone()
 	transport.TLSClientConfig.InsecureSkipVerify = skipVerify
 

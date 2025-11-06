@@ -60,7 +60,7 @@ func (hs *HealthServer) Start() {
 	mux.HandleFunc("/readyz", hs.HandleReady)
 	mux.HandleFunc("/startupz", hs.HandleStartup)
 
-	listener, err := net.Listen("tcp", address)
+	listener, err := net.Listen("tcp", address) //nolint:noctx
 	if err != nil {
 		slog.Error("failed to listen", "error", err)
 		return

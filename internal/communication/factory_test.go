@@ -24,7 +24,6 @@ func TestNewHTTPClient(t *testing.T) {
 	}
 }
 
-//nolint:goconst
 func TestNewHeaders(t *testing.T) {
 	t.Parallel()
 	headers := NewHeaders("fakeKey")

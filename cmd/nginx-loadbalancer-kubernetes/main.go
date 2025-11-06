@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -119,7 +120,7 @@ func initializeLogger(logLevel string) {
 func buildKubernetesClient() (*kubernetes.Clientset, error) {
 	slog.Debug("Watcher::buildKubernetesClient")
 	k8sConfig, err := rest.InClusterConfig()
-	if err == rest.ErrNotInCluster {
+	if errors.Is(err, rest.ErrNotInCluster) {
 		return nil, fmt.Errorf(`not running in a Cluster: %w`, err)
 	} else if err != nil {
 		return nil, fmt.Errorf(`error occurred getting the Cluster config: %w`, err)

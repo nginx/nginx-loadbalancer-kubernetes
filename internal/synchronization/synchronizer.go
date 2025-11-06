@@ -133,12 +133,12 @@ func (s *Synchronizer) buildBorderClient(event *core.ServerUpdateEvent) (applica
 	var err error
 	httpClient, err := communication.NewHTTPClient(s.settings.APIKey, s.settings.SkipVerifyTLS)
 	if err != nil {
-		return nil, fmt.Errorf(`error creating HTTP client: %v`, err)
+		return nil, fmt.Errorf(`error creating HTTP client: %w`, err)
 	}
 
 	ngxClient, err := nginxClient.NewNginxClient(event.NginxHost, nginxClient.WithHTTPClient(httpClient))
 	if err != nil {
-		return nil, fmt.Errorf(`error creating Nginx Plus client: %v`, err)
+		return nil, fmt.Errorf(`error creating Nginx Plus client: %w`, err)
 	}
 
 	return application.NewBorderClient(event.ClientType, ngxClient)
@@ -164,6 +164,8 @@ func (s *Synchronizer) fanOutEventToHosts(event core.ServerUpdateEvents) core.Se
 // handleServiceEvent gets the latest state for the service from the shared
 // informer cache, translates the service event into server update events and
 // dispatches these events to the proper handler function.
+//
+//nolint:gocognit
 func (s *Synchronizer) handleServiceEvent(ctx context.Context, key ServiceKey) (err error) {
 	logger := slog.With("service", key)
 	logger.Debug(`Synchronizer::handleServiceEvent`)
