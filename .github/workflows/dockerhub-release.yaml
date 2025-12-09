@@ -1,0 +1,77 @@
+name: dockerhub-release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  dockerhub-release:
+    runs-on: ubuntu-latest
+    if: >
+      startsWith(github.ref_name, 'v') &&
+      github.ref_type == 'tag' &&
+      contains(github.ref_name, '.')
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Azure Login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Docker Login to the Source Azure Container Registry
+        run: |
+          registry_name=${{ secrets.DOCKER_REGISTRY_PROD }}
+          az acr login --name ${registry_name%%.*}
+
+      - name: Release Docker Image to Dockerhub
+        run: make release-docker-image
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+          DOCKER_REGISTRY_PROD: ${{ secrets.DOCKER_REGISTRY_PROD }}
+
+      - name: Release Helm Chart to Dockerhub
+        run: make release-helm-chart
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+          DOCKER_REGISTRY_PROD: ${{ secrets.DOCKER_REGISTRY_PROD }}
+
+  cnab-release:
+    needs: [dockerhub-release]
+    runs-on: ubuntu-latest
+
+    if: >
+      startsWith(github.ref_name, 'v') &&
+      github.ref_type == 'tag' &&
+      contains(github.ref_name, '.')
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Azure Login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_MARKETPLACE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_MARKETPLACE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_MARKETPLACE_SUBSCRIPTION_ID }}
+
+      - name: Docker Login to the Marketplace Azure Container Registry
+        run: |
+          registry_name=${{ secrets.DOCKER_REGISTRY_MARKETPLACE }}
+          az acr login --name ${registry_name%%.*}
+
+      - name: Release CNAB Bundle to Marketplace Registry
+        run: make release-cnab
+        env:
+          DOCKER_REGISTRY_PROD: ${{ secrets.DOCKER_REGISTRY_PROD }}
