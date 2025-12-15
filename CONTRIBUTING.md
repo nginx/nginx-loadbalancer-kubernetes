@@ -16,6 +16,24 @@ The following is a set of guidelines for contributing to the nginx_loadbalancer_
 
 Follow our [Installation Guide](https://github.com/nginx/nginx-loadbalancer-kubernetes/blob/main/README.md#Installation) to get the nginx_loadbalancer_kubernetes up and running.
 
+### Environment Configuration
+
+Before running build and publish make targets, you need to configure and export the required environment variables in a .env file. The `.env` file exports the container registry URLs (`DOCKER_REGISTRY_PROD`, `DOCKER_REGISTRY_DEV`) that are required by the build and publish make targets:
+  ```bash
+  $ cat .env
+  ...
+  export DOCKER_REGISTRY_PROD="prod.azurecr.io"
+  export DOCKER_REGISTRY_DEV="dev.azurecr.io"
+  ...
+  ```
+
+1. **Source the environment file**: This file contains sensitive configuration and is not tracked in git.
+
+   ```bash
+   source .env
+   ```
+
+
 <!-- ### Project Structure (OPTIONAL) -->
 
 ## Contributing

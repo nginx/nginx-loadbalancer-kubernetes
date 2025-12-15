@@ -1,0 +1,115 @@
+name: "dev-workflow"
+
+on:
+  workflow_dispatch:
+  push:
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+  security-events: write
+
+
+jobs:
+  lint_test_build:
+    runs-on: ubuntu-latest
+
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Azure Login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Docker Login to Azure Container Registry
+        run: |
+          registry_name=${{ secrets.DOCKER_REGISTRY_PROD }}
+          az acr login --name ${registry_name%%.*}
+
+      - name: "lint + unit-test + build"
+        env: 
+          DOCKER_REGISTRY_PROD: ${{ secrets.DOCKER_REGISTRY_PROD }}
+        run: |
+              if [ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]; then
+                time make helm-lint
+                # Only run Go linting if Go files have changed
+                if git diff --name-only HEAD~1 HEAD | grep -E '\.(go|mod)$'; then
+                  echo "Go files detected in changes, running Go linters..."
+                  time make lint
+                  git diff --exit-code
+                else
+                  echo "No Go files changed, skipping Go linting..."
+                fi
+                time make test
+              fi
+              time make publish
+              time make publish-helm
+
+  validate_cnab:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Azure Login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Docker Login to Azure Container Registry
+        run: |
+          registry_name=${{ secrets.DOCKER_REGISTRY_PROD }}
+          az acr login --name ${registry_name%%.*}
+
+      - name: "validate-cnab"
+        run: time make validate-cnab
+
+  security_scanning:
+    needs: [lint_test_build, validate_cnab]
+    runs-on: ubuntu-latest
+
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Azure Login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Docker Login to Azure Container Registry
+        run: |
+          registry_name=${{ secrets.DOCKER_REGISTRY_PROD }}
+          az acr login --name ${registry_name%%.*}
+
+      - name: "NLK image scanning"
+        env: 
+          DOCKER_REGISTRY_PROD: ${{ secrets.DOCKER_REGISTRY_PROD }}
+        run: time make scan-container-image
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: results/trivy/trivy-results.sarif
