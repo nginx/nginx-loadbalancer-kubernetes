@@ -20,7 +20,7 @@ fi
 mkdir -p "$BUILD_DIR"
 
 pkg_path="./cmd/nginx-loadbalancer-kubernetes"
-BUILDPKG="github.com/nginxinc/kubernetes-nginx-ingress/pkg/buildinfo"
+BUILDPKG="github.com/nginx/kubernetes-nginx-ingress/pkg/buildinfo"
 
 ldflags=(
     # Set the value of the string variable in importpath named name to value.
