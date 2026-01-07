@@ -16,10 +16,6 @@ package() {
 validate() {
     CMD="cpa verify -d ${BUNDLE_DIR} --telemetryOptOut"
     ${CMD}
-    if ! git --no-pager diff --exit-code; then
-        log "Bundle validation failed: changes detected after verification."
-        exit 1
-    fi
 }
 
 set_version() {

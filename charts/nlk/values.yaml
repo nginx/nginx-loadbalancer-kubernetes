@@ -1,18 +1,15 @@
 #####################################
 # Global Azure Marketplace configuration for AKS integration.
 # DO NOT REMOVE
+# For more information, see:
+# https://learn.microsoft.com/en-us/partner-center/marketplace-offers/azure-container-technical-assets-kubernetes?tabs=linux%2Clinux2#update-the-helm-chart
 global:
   azure:
-    images:
-      nlk:
-        registry: registry-1.docker.io
-        image: nginx/nginxaas-loadbalancer-kubernetes
-        tag: 1.2.5
-        # images:
-        #   nlk:
-        #     registry: registry-1.docker.io
-        #     image: nginx/nginxaas-loadbalancer-kubernetes
-        #     tag: 0.4.0
+  # images:
+  #   nlk:
+  #     registry: registry-1.docker.io
+  #     image: nginx/nginxaas-loadbalancer-kubernetes
+  #     tag: 1.2.5
 #####################################
 nlk:
   name: nginxaas-loadbalancer-kubernetes
