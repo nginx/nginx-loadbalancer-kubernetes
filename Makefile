@@ -90,5 +90,7 @@ release-cnab:
 	@$(MAKE) .run img="$(CNAB_IMG)" DOCKER_EXTRA_ARGS=" \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		--group-add $(shell stat -c '%g' /var/run/docker.sock) \
+		--user root:root \
+		-e HOME=/root \
 		-e CI=$(CI)" \
 		args="$(ROOT_DIR)/scripts/cnab.sh package"
