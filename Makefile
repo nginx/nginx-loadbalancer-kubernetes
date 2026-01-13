@@ -90,7 +90,7 @@ release-cnab:
 	@$(MAKE) .run img="$(CNAB_IMG)" DOCKER_EXTRA_ARGS=" \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		--group-add $(shell stat -c '%g' /var/run/docker.sock) \
- 		-v $(HOME)/.docker:/root/.docker:ro \
+ 		-v $(HOME)/.docker:/root/.docker \
   		-e DOCKER_CONFIG=/root/.docker \
 		--user root:root \
 		-e HOME=/root \
