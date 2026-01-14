@@ -19,7 +19,7 @@ CNAB_IMG := mcr.microsoft.com/container-package-app:latest
 
 GITHUB_WORKSPACE ?= $(ROOT_DIR)
 
-.PHONY: .run all helm-lint lint test validate-cnab build-linux build-linux-docker publish publish-helm scan-container-image release-docker-image release-helm-chart release-cnab
+.PHONY: .run all helm-lint lint test validate-cnab build-linux build-linux-docker publish publish-helm scan-container-image release-docker-image release-helm-chart release-cnab trigger-e2e
 .run:
 ifeq ($(CI),true)
 	$(eval DOCKER_CI_SWITCH_ARGS = -e GOPATH=/tmp/gopath)
@@ -96,3 +96,6 @@ release-cnab:
 		-e HOME=/root \
 		-e CI=$(CI)" \
 		args="$(ROOT_DIR)/scripts/cnab.sh package"
+
+trigger-e2e:
+	@./scripts/e2e-trigger.sh

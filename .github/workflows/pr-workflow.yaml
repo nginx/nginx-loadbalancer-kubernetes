@@ -1,0 +1,31 @@
+name: PR e2e Tests
+
+on:
+  workflow_run:
+    workflows: ["dev-workflow"]
+    types: [completed]
+
+jobs:
+  trigger-e2e-tests:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: "NLK image scanning e2e test"
+        env:
+          DOCKER_REGISTRY_PROD: ${{ secrets.DOCKER_REGISTRY_PROD }}
+          TRIGGER_TOKEN: ${{ secrets.E2E_TEST_TRIGGER_TOKEN }}
+          POLL_TOKEN: ${{ secrets.E2E_TEST_POLL_TOKEN }}
+          TRIGGER_PROJECT_ID: ${{ secrets.E2E_TEST_TRIGGER_PROJECT_ID }}
+          TEST_ARGS: "test_dataplane_api.py::test_nlk_aks_apps"
+          TEST_TYPE: "e2e.arm"
+          IS_TEST_ONLY: "true"
+        run: |
+          make trigger-e2e
