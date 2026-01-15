@@ -163,7 +163,7 @@
             "dependsOn": [],
             "tags": {},
             "sku": {
-                "name": "Basic",
+                "name": "Base",
                 "tier": "Free"
             },
             "identity": {
@@ -241,6 +241,5 @@
             ]
         }
     ],
-    "outputs": {
-    }
+    "outputs": {}
 }
