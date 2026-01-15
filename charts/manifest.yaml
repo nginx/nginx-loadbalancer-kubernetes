@@ -1,7 +1,7 @@
 applicationName: "marketplace/nginxaas-loadbalancer-kubernetes"
 publisher: "F5, Inc."
 description: "A component that manages NGINXaaS for Azure deployment and makes it act as  Load Balancer for kubernetes workloads."
-version: 1.2.6
+version: 1.2.7
 helmChart: "./nlk"
 clusterArmTemplate: "./armTemplate.json"
 uiDefinition: "./createUIDefinition.json"
