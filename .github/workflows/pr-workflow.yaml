@@ -1,15 +1,15 @@
 name: PR e2e Tests
 
 on:
-  workflow_run:
-    workflows: ["dev-workflow"]
-    types: [completed]
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
 
 jobs:
   trigger-e2e-tests:
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
