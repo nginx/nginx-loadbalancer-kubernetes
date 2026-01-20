@@ -8,8 +8,14 @@ if [[ "${CI}" != "true" ]]; then
     exit 1
 fi
 
+if [[ -n "${GITHUB_HEAD_REF}" ]]; then
+    TEST_NLK_CHART_REF="${GITHUB_HEAD_REF}"
+else
+    TEST_NLK_CHART_REF="${GITHUB_REF_NAME}"
+fi
+
+TEST_NLK_CHART_URL="oci://${DOCKER_REGISTRY_PROD}/nginx-azure-lb/nginxaas-loadbalancer-kubernetes/charts/${TEST_NLK_CHART_REF}/nginxaas-loadbalancer-kubernetes"
 TEST_NLK_IMG_TAG=$(cat version)
-TEST_NLK_CHART_URL="oci://${DOCKER_REGISTRY_PROD}/nginx-azure-lb/nginxaas-loadbalancer-kubernetes/charts/${GITHUB_REF_NAME}/nginxaas-loadbalancer-kubernetes"
 GITLAB_API="${GITLAB_API_URL:-https://gitlab.com/api/v4}"
 
 GITLAB_PIPELINE_ID=$(curl -sS --fail-with-body -X POST \
