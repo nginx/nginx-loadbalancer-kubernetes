@@ -73,7 +73,7 @@ scan-container-image:
 	@$(MAKE) .run DOCKER_EXTRA_ARGS=" \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		--group-add $(shell stat -c '%g' /var/run/docker.sock)" \
-		args="trivy image --severity HIGH,CRITICAL --exit-code 1 nginxaas-loadbalancer-kubernetes:current""
+		args="trivy image --severity HIGH,CRITICAL --exit-code 1 nginxaas-loadbalancer-kubernetes:current"
 	@$(MAKE) .run DOCKER_EXTRA_ARGS=" \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		--group-add $(shell stat -c '%g' /var/run/docker.sock)" \
