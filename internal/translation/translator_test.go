@@ -1508,7 +1508,7 @@ func generatePorts(portCount int) []v1.ServicePort {
 
 // This is probably A Little Bit of Too Much™, but helps to ensure ordering is not a factor.
 func generateUpdatablePorts(portCount int, updatableCount int) []v1.ServicePort {
-	ports := []v1.ServicePort{} //nolint:prealloc
+	ports := make([]v1.ServicePort, 0, portCount)
 
 	updatable := make([]string, updatableCount)
 	nonupdatable := make([]string, portCount-updatableCount)

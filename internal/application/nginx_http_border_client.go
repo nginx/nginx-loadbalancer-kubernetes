@@ -62,7 +62,7 @@ func asNginxHTTPUpstreamServer(server *core.UpstreamServer) nginxClient.Upstream
 
 // asNginxHTTPUpstreamServers converts a core.UpstreamServers to a []nginxClient.UpstreamServer.
 func asNginxHTTPUpstreamServers(servers core.UpstreamServers) []nginxClient.UpstreamServer {
-	upstreamServers := []nginxClient.UpstreamServer{} //nolint:prealloc
+	upstreamServers := make([]nginxClient.UpstreamServer, 0, len(servers))
 
 	for _, server := range servers {
 		upstreamServers = append(upstreamServers, asNginxHTTPUpstreamServer(server))
