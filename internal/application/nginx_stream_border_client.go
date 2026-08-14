@@ -60,7 +60,7 @@ func asNginxStreamUpstreamServer(server *core.UpstreamServer) nginxClient.Stream
 }
 
 func asNginxStreamUpstreamServers(servers core.UpstreamServers) []nginxClient.StreamUpstreamServer {
-	upstreamServers := []nginxClient.StreamUpstreamServer{}
+	upstreamServers := []nginxClient.StreamUpstreamServer{} //nolint:prealloc
 
 	for _, server := range servers {
 		upstreamServers = append(upstreamServers, asNginxStreamUpstreamServer(server))
