@@ -17,7 +17,7 @@ import (
 	"github.com/nginx/kubernetes-nginx-ingress/internal/communication"
 	"github.com/nginx/kubernetes-nginx-ingress/internal/configuration"
 	"github.com/nginx/kubernetes-nginx-ingress/internal/core"
-	nginxClient "github.com/nginx/nginx-plus-go-client/v2/client"
+	nginxClient "github.com/nginx/nginx-plus-go-client/v3/client"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	corelisters "k8s.io/client-go/listers/core/v1"
@@ -148,7 +148,7 @@ func (s *Synchronizer) buildBorderClient(event *core.ServerUpdateEvent) (applica
 func (s *Synchronizer) fanOutEventToHosts(event core.ServerUpdateEvents) core.ServerUpdateEvents {
 	slog.Debug(`Synchronizer::fanOutEventToHosts`)
 
-	var events core.ServerUpdateEvents
+	events := make(core.ServerUpdateEvents, 0, len(event)*len(s.settings.NginxPlusHosts))
 
 	for _, host := range s.settings.NginxPlusHosts {
 		for _, event := range event {

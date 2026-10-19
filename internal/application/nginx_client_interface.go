@@ -8,7 +8,7 @@ package application
 import (
 	"context"
 
-	nginxClient "github.com/nginx/nginx-plus-go-client/v2/client"
+	nginxClient "github.com/nginx/nginx-plus-go-client/v3/client"
 )
 
 var _ NginxClientInterface = (*nginxClient.NginxClient)(nil)

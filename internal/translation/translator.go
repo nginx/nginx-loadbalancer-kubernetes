@@ -210,7 +210,7 @@ func (t *Translator) buildNodeIPEvents(ports []v1.ServicePort, event *core.Event
 }
 
 func buildUpstreamServers(ipAddresses []string, port int32) core.UpstreamServers {
-	var servers core.UpstreamServers
+	servers := make(core.UpstreamServers, 0, len(ipAddresses))
 
 	for _, ip := range ipAddresses {
 		host := fmt.Sprintf("%s:%d", ip, port)
