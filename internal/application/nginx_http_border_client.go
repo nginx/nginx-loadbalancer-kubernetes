@@ -11,7 +11,7 @@ import (
 	"fmt"
 
 	"github.com/nginx/kubernetes-nginx-ingress/internal/core"
-	nginxClient "github.com/nginx/nginx-plus-go-client/v2/client"
+	nginxClient "github.com/nginx/nginx-plus-go-client/v3/client"
 )
 
 // NginxHttpBorderClient implements the BorderClient interface for HTTP upstreams.
