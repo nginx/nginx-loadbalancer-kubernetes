@@ -55,21 +55,11 @@ help_text() {
 }
 
 set_docker_common() {
-    if [[ -z "${DOCKERHUB_USERNAME}" ]]; then
-        log "DOCKERHUB_USERNAME needs to be set."
-        exit 1
-    fi
-
-    if [[ -z "${DOCKERHUB_PASSWORD}" ]]; then
-        log "DOCKERHUB_PASSWORD needs to be set."
-        exit 1
-    fi
+    # Docker Hub authentication is performed by the docker/login-action step
+    # (OIDC) in the workflow before this script runs.
     SRC_REGISTRY="${DOCKER_REGISTRY_PROD}"
     DST_REGISTRY="docker.io"
-    
-    log "Logging in to the destination registry..."
-    docker login --username "${DOCKERHUB_USERNAME}" --password "${DOCKERHUB_PASSWORD}" "${DST_REGISTRY}"
-    
+
     SRC_TAG=$(echo "${GITHUB_REF_NAME}" | cut -f 2 -d "v")
     DST_TAG="${SRC_TAG}"
 }
