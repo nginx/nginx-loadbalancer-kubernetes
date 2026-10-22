@@ -14,8 +14,23 @@ else
     TEST_NLK_CHART_REF="${GITHUB_REF_NAME}"
 fi
 
+VERSION=$(cat version)
+
+TEST_NLK_CHART_SLUG=$(
+    echo "${TEST_NLK_CHART_REF}" | tr "[:upper:]" "[:lower:]" \
+        | LANG=C sed -E -e 's/[^a-zA-Z0-9]/-/g' -e 's/^-+|-+$//g' \
+        | cut -c 1-63
+)
+
 TEST_NLK_CHART_URL="oci://${DOCKER_REGISTRY_PROD}/nginx-azure-lb/nginxaas-loadbalancer-kubernetes/charts/${TEST_NLK_CHART_REF}/nginxaas-loadbalancer-kubernetes"
-TEST_NLK_IMG_TAG=$(cat version)
+
+if [[ "${TEST_NLK_CHART_SLUG}" == "main" ]]; then
+    TEST_NLK_IMG_TAG="${VERSION}"
+else
+    TEST_NLK_IMG_TAG="${TEST_NLK_CHART_SLUG}-${VERSION}"
+fi
+
+TEST_NLK_CHART_VERSION="${VERSION}"
 GITLAB_API="${GITLAB_API_URL:-https://gitlab.com/api/v4}"
 
 GITLAB_PIPELINE_ID=$(curl -sS --fail-with-body -X POST \
@@ -25,6 +40,7 @@ GITLAB_PIPELINE_ID=$(curl -sS --fail-with-body -X POST \
     --form "variables[TEST_TYPE]=${TEST_TYPE}" \
     --form "variables[TEST_NLK_CHART_URL]=${TEST_NLK_CHART_URL}" \
     --form "variables[TEST_NLK_IMG_TAG]=${TEST_NLK_IMG_TAG}" \
+    --form "variables[TEST_NLK_CHART_VERSION]=${TEST_NLK_CHART_VERSION}" \
     --form "variables[TEST_ARGS]=${TEST_ARGS}" \
     "$GITLAB_API/projects/${TRIGGER_PROJECT_ID}/trigger/pipeline" | jq -r .id )
 
